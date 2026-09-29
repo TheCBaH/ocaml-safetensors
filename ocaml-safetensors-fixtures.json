@@ -1,0 +1,386 @@
+{
+  "schema_version": 1,
+  "purpose": "Research lock for standalone reader conformance; not a producer weight-map schema",
+  "checked_on": "2026-09-29",
+  "reference": {
+    "release": "0.8.0",
+    "git_commit": "a406ca3e7a90598be0cd05a50069cb9bf5ef6ba6",
+    "source_inspected_main": "e246a2560645b7525f5775669ed816eb57c5bcc8",
+    "executed": false
+  },
+  "limits": {
+    "max_file_bytes": 2097152,
+    "max_suite_bytes": 5242880
+  },
+  "total_file_bytes": 3114833,
+  "total_payload_bytes": 3081652,
+  "files": [
+    {
+      "id": "clip-shard",
+      "repo_id": "hf-internal-testing/tiny-stable-diffusion-pipe-indexes",
+      "revision": "cf7fc42704b27a998192df2d95fea37ff2792a18",
+      "filename": "text_encoder/model-00001-of-00004.safetensors",
+      "url": "https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/resolve/cf7fc42704b27a998192df2d95fea37ff2792a18/text_encoder/model-00001-of-00004.safetensors",
+      "size_bytes": 750,
+      "sha256": "fb2f042a629c39b489ee36e74f96042660beebc6d093bbf8c99a87eb8df4e35f",
+      "header_bytes": 126,
+      "payload_bytes": 616,
+      "tensor_count": 1,
+      "dtypes": {
+        "I64": 1
+      },
+      "ranks": [
+        2
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt"
+      },
+      "declared_license": null,
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "text_model.embeddings.position_ids",
+          "dtype": "I64",
+          "shape": [
+            1,
+            77
+          ],
+          "data_offsets": [
+            0,
+            616
+          ]
+        }
+      ],
+      "header_sha256": "3b9c4a1e47c74f3c0e13a985792462ac66d1f74fb2076f970eaade0f2a1369c3",
+      "payload_sha256": "0c360bd8b8049d9e1e239e19ab46457f58685af5c4c2068a32b5c794a9e87d18",
+      "data_start": 134,
+      "blob_url": "https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/blob/cf7fc42704b27a998192df2d95fea37ff2792a18/text_encoder/model-00001-of-00004.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    },
+    {
+      "id": "vit",
+      "repo_id": "hf-internal-testing/tiny-random-vit",
+      "revision": "96e253fe90cfcededfa8edf8b7e6f230f87a63a1",
+      "filename": "model.safetensors",
+      "url": "https://huggingface.co/hf-internal-testing/tiny-random-vit/resolve/96e253fe90cfcededfa8edf8b7e6f230f87a63a1/model.safetensors",
+      "size_bytes": 176460,
+      "sha256": "b38d069d27638fcf45c8f98d40b83e49b0987b7bb4743f140c5bde91c78f10a3",
+      "header_bytes": 9432,
+      "payload_bytes": 167020,
+      "tensor_count": 88,
+      "dtypes": {
+        "F32": 88
+      },
+      "ranks": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt"
+      },
+      "declared_license": null,
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "classifier.bias",
+          "dtype": "F32",
+          "shape": [
+            2
+          ],
+          "data_offsets": [
+            0,
+            8
+          ]
+        },
+        {
+          "name": "classifier.weight",
+          "dtype": "F32",
+          "shape": [
+            2,
+            32
+          ],
+          "data_offsets": [
+            8,
+            264
+          ]
+        }
+      ],
+      "header_sha256": "33c42b59f72337a942c7b55e39b62ea48d17b4f0b688ea8d0932621e609294cb",
+      "payload_sha256": "614d48bd307c938d08fb149e6ee9e8a587bb1f272b2ac7bcbc4b9286e507f705",
+      "data_start": 9440,
+      "blob_url": "https://huggingface.co/hf-internal-testing/tiny-random-vit/blob/96e253fe90cfcededfa8edf8b7e6f230f87a63a1/model.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    },
+    {
+      "id": "clip-unaligned",
+      "repo_id": "hf-internal-testing/tiny-stable-diffusion-pipe-safetensors",
+      "revision": "1d6dee47dabc49f0b52d9b1c7a3b6bef244360cb",
+      "filename": "text_encoder/model.safetensors",
+      "url": "https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-safetensors/resolve/1d6dee47dabc49f0b52d9b1c7a3b6bef244360cb/text_encoder/model.safetensors",
+      "size_bytes": 283923,
+      "sha256": "fcd9bf150bd5fbf04e4a4ba5c141a1a275a2e8d1903a47e82bf764d5dfedbd3b",
+      "header_bytes": 9407,
+      "payload_bytes": 274508,
+      "tensor_count": 85,
+      "dtypes": {
+        "F32": 84,
+        "I64": 1
+      },
+      "ranks": [
+        1,
+        2
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt"
+      },
+      "declared_license": "apache-2.0",
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "text_model.embeddings.position_embedding.weight",
+          "dtype": "F32",
+          "shape": [
+            77,
+            32
+          ],
+          "data_offsets": [
+            0,
+            9856
+          ]
+        },
+        {
+          "name": "text_model.embeddings.position_ids",
+          "dtype": "I64",
+          "shape": [
+            1,
+            77
+          ],
+          "data_offsets": [
+            9856,
+            10472
+          ]
+        }
+      ],
+      "header_sha256": "af45a88e930d8407ac07ab4703ecc872d5545db624eb16c7dacb24378a44e8ca",
+      "payload_sha256": "1394440a65c77c8dcb3510ed398d8c56c615507fb5c14abd9d4ce81a57203d37",
+      "data_start": 9415,
+      "blob_url": "https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-safetensors/blob/1d6dee47dabc49f0b52d9b1c7a3b6bef244360cb/text_encoder/model.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    },
+    {
+      "id": "bert",
+      "repo_id": "hf-internal-testing/tiny-random-bert",
+      "revision": "f171d7baecaf37b5da5a3616d8833b9969753535",
+      "filename": "model.safetensors",
+      "url": "https://huggingface.co/hf-internal-testing/tiny-random-bert/resolve/f171d7baecaf37b5da5a3616d8833b9969753535/model.safetensors",
+      "size_bytes": 520212,
+      "sha256": "965f02b6a7e5520fc12f710e4e3b6132f697f1c8f648819553c5ade86752d2de",
+      "header_bytes": 10752,
+      "payload_bytes": 509452,
+      "tensor_count": 100,
+      "dtypes": {
+        "I64": 1,
+        "F32": 99
+      },
+      "ranks": [
+        1,
+        2
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt",
+        "cls.predictions.decoder.bias": "cls.predictions.bias"
+      },
+      "declared_license": null,
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "bert.embeddings.position_ids",
+          "dtype": "I64",
+          "shape": [
+            1,
+            512
+          ],
+          "data_offsets": [
+            0,
+            4096
+          ]
+        },
+        {
+          "name": "bert.embeddings.LayerNorm.bias",
+          "dtype": "F32",
+          "shape": [
+            32
+          ],
+          "data_offsets": [
+            4096,
+            4224
+          ]
+        }
+      ],
+      "header_sha256": "747fea1306f968c6c692b4361cf4a2f33d20052a559c8ff4f7d123c28ce9a970",
+      "payload_sha256": "9c1991cf3fb125122c315b6519332f4893d0065057771028117f9a5ba50af9d8",
+      "data_start": 10760,
+      "blob_url": "https://huggingface.co/hf-internal-testing/tiny-random-bert/blob/f171d7baecaf37b5da5a3616d8833b9969753535/model.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    },
+    {
+      "id": "llama-f16",
+      "repo_id": "yujiepan/llama-2-tiny-random",
+      "revision": "74bb065d6381fdf9fcde5896cb32267ba2c0ee0a",
+      "filename": "model.safetensors",
+      "url": "https://huggingface.co/yujiepan/llama-2-tiny-random/resolve/74bb065d6381fdf9fcde5896cb32267ba2c0ee0a/model.safetensors",
+      "size_bytes": 1027424,
+      "sha256": "5b933502925c364d8961d8eabc9b2992c6f131df36c972654c90682bc167d828",
+      "header_bytes": 1312,
+      "payload_bytes": 1026104,
+      "tensor_count": 13,
+      "dtypes": {
+        "F32": 1,
+        "F16": 12
+      },
+      "ranks": [
+        1,
+        2
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt"
+      },
+      "declared_license": null,
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "model.layers.0.self_attn.rotary_emb.inv_freq",
+          "dtype": "F32",
+          "shape": [
+            2
+          ],
+          "data_offsets": [
+            0,
+            8
+          ]
+        },
+        {
+          "name": "lm_head.weight",
+          "dtype": "F16",
+          "shape": [
+            32000,
+            8
+          ],
+          "data_offsets": [
+            8,
+            512008
+          ]
+        }
+      ],
+      "header_sha256": "9230d3ca7080119c650bc73b590e2f7cd9648ae1efe6a2a38db557c7b3bc6155",
+      "payload_sha256": "ad93a7d7f0b85f93248164d7a1085e4973f6088c5be5e8f411152fb811a29b71",
+      "data_start": 1320,
+      "blob_url": "https://huggingface.co/yujiepan/llama-2-tiny-random/blob/74bb065d6381fdf9fcde5896cb32267ba2c0ee0a/model.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    },
+    {
+      "id": "baguettotron-bf16",
+      "repo_id": "yujiepan/baguettotron-tiny-random",
+      "revision": "af0b4761164785c04017e74bed9a6a13fdf2d44d",
+      "filename": "model.safetensors",
+      "url": "https://huggingface.co/yujiepan/baguettotron-tiny-random/resolve/af0b4761164785c04017e74bed9a6a13fdf2d44d/model.safetensors",
+      "size_bytes": 1106064,
+      "sha256": "52e46712c7b65e789ca8640249c83ec372396250b68127097a5b1c02434a093f",
+      "header_bytes": 2104,
+      "payload_bytes": 1103952,
+      "tensor_count": 20,
+      "dtypes": {
+        "BF16": 20
+      },
+      "ranks": [
+        1,
+        2
+      ],
+      "scalar_count": 0,
+      "empty_count": 0,
+      "metadata": {
+        "format": "pt"
+      },
+      "declared_license": null,
+      "observed_gated": false,
+      "tensor_examples": [
+        {
+          "name": "model.embed_tokens.weight",
+          "dtype": "BF16",
+          "shape": [
+            65536,
+            8
+          ],
+          "data_offsets": [
+            0,
+            1048576
+          ]
+        },
+        {
+          "name": "model.layers.0.input_layernorm.weight",
+          "dtype": "BF16",
+          "shape": [
+            8
+          ],
+          "data_offsets": [
+            1048576,
+            1048592
+          ]
+        }
+      ],
+      "header_sha256": "dead468e84a31a8b02702c2083df8777f06209191215f115b389ea33c9b527b1",
+      "payload_sha256": "1c6e55bead75147d317c8e420a0e92bbbb398c012ca4b1248caca13404e81058",
+      "data_start": 2112,
+      "blob_url": "https://huggingface.co/yujiepan/baguettotron-tiny-random/blob/af0b4761164785c04017e74bed9a6a13fdf2d44d/model.safetensors",
+      "verification": {
+        "downloaded_full_file": true,
+        "size_and_sha256_checked": true,
+        "header_inspected": true,
+        "upstream_reader_run": false,
+        "ocaml_reader_run": false
+      }
+    }
+  ]
+}
