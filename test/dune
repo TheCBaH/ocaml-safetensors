@@ -1,0 +1,11 @@
+(test
+ (name test_core)
+ (modules test_core)
+ (package safetensors)
+ (libraries safetensors))
+
+(test
+ (name test_reader)
+ (modules test_reader)
+ (package safetensors-unix)
+ (libraries safetensors safetensors-unix unix))

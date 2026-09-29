@@ -1,0 +1,18 @@
+{
+  "name": "ocaml-safetensors",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "vscode", "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/sshd:1": {},
+    "ghcr.io/thecbah/ocaml-features/ocaml:1": {
+      "version": "4.14.3",
+      "packages": "dune jsont#0.2.0 bytesrw ocamlformat#0.29.0"
+    }
+  },
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": { "extensions": ["ocamllabs.ocaml-platform"] }
+  }
+}

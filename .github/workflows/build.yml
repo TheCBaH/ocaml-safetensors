@@ -1,0 +1,43 @@
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ocaml: '4.14.3'
+            jsont: '0.2.0'
+            dune: '3.17.2'
+          - ocaml: '5.3.0'
+            jsont: '0.4.0'
+            dune: '3.24.0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ matrix.ocaml }}
+      - name: Install dependencies
+        run: opam install -y dune.${{ matrix.dune }} jsont.${{ matrix.jsont }} bytesrw ocamlformat.0.29.0
+      - run: make build runtest format
+      - name: Verify generated files
+        run: test -z "$(git status --porcelain)"
+  devcontainer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: TheCBaH/devcontainer-action/devcontainer@v1
+        id: container
+      - name: Build and test in development image
+        run: ${{ steps.container.outputs.exec }} make build runtest format
