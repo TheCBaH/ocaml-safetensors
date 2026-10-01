@@ -141,3 +141,8 @@ scope. Future integrations need their own plan.
 [Design](ocaml-safetensors-design.md) ·
 [Verification research](ocaml-safetensors-verification.md) ·
 [Fixture lock](ocaml-safetensors-fixtures.json)
+
+Optional [JavaScript backends](docs/javascript.md) compile the same Jsont
+reader with js_of_ocaml or Melange. Both provide copying Uint8Array adapters;
+`make test.javascript` verifies Node, Chromium and external installed clients.
+Native packages retain their independent toolchain and dependency requirements.

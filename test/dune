@@ -1,6 +1,6 @@
 (test
  (name test_core)
- (modules test_core)
+ (modules test_core core_cases)
  (deps
   (glob_files fixtures/*.safetensors))
  (package safetensors)

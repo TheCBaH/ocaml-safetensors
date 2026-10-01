@@ -60,7 +60,7 @@ def raw(header, payload=b''):
     return struct.pack('<Q', len(header)) + header + payload
 
 
-def probes():
+def probe_cases():
     tensor = '{"dtype":"U8","shape":[0],"data_offsets":[0,0]}'
     def t(shape='[0]', offsets='[0,0]', dtype='U8'):
         return '{"x":{"dtype":"%s","shape":%s,"data_offsets":%s}}' % (dtype, shape, offsets)
@@ -93,10 +93,14 @@ def probes():
         ('deep-nesting', raw('{"x":{"shape":'+ '['*10000 + '0' + ']'*10000 + '}}'), False, 'invalid_json', None),
         ('bounded-rank', raw(t('['+','.join(['0']*1000)+']')), True, 'resource_limit', 'configured rank limit'),
     ]
+    return cases
+
+
+def probes():
     output = []
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / 'probe.safetensors'
-        for name, data, exp_ref, exp_kind, reason in cases:
+        for name, data, exp_ref, exp_kind, reason in probe_cases():
             path.write_bytes(data)
             try:
                 deserialize(data)

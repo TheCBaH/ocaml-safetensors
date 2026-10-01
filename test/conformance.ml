@@ -29,9 +29,14 @@ let inspect path =
   | Error a, Error b ->
       if Error.kind a <> Error.kind b then
         failwith "memory/file rejection mismatch";
-      Printf.printf {|{"ok":false,"kind":%s,"message":%s}%!|}
+      Printf.printf
+        {|{"ok":false,"kind":%s,"message":%s,"path":%s,"byte_offset":%s}%!|}
         (quote (Error.kind_name (Error.kind a)))
         (quote (Format.asprintf "%a" Error.pp a))
+        (Option.fold ~none:"null" ~some:quote (Error.path a))
+        (Option.fold ~none:"null"
+           ~some:(fun n -> quote (Int64.to_string n))
+           (Error.byte_offset a))
   | Error _, Ok f ->
       Safetensors_unix.close f;
       failwith "file reader accepted memory rejection"
