@@ -19,7 +19,8 @@ test.hub: build
 test.standalone:
 	opam exec -- bash scripts/standalone.sh
 test.stress: build
-	SAFETENSORS_CASES=10000 opam exec -- dune exec test/test_reader.exe
+	mkdir -p .cache/reports
+	bash -o pipefail -c 'SAFETENSORS_CASES=10000 opam exec -- dune exec test/test_reader.exe | tee .cache/reports/stress.txt'
 
 .PHONY: js.deps js.reference js.corpus js.build.jsoo js.build.melange test.jsoo test.melange test.javascript test.js.install
 js.deps:
