@@ -53,3 +53,9 @@ test.javascript.offline:
 	bash scripts/offline.sh make test.javascript.run
 test.native.offline:
 	bash scripts/offline.sh make PYTHON=.venv/bin/python test.interop test.hub test.stress
+
+.PHONY: tree.check
+tree.check:
+	git status --short
+	git diff --exit-code
+	test -z "$$(git status --porcelain)"

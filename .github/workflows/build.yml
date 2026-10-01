@@ -62,9 +62,7 @@ jobs:
           path: .cache/reports/
           if-no-files-found: warn
       - name: Verify generated files
-        run: |
-          git diff --exit-code
-          test -z "$(git status --porcelain)"
+        run: make tree.check
   javascript:
     runs-on: ubuntu-latest
     steps:
@@ -88,6 +86,4 @@ jobs:
           path: .cache/reports/
           if-no-files-found: warn
       - name: Verify generated files
-        run: |
-          git diff --exit-code
-          test -z "$(git status --porcelain)"
+        run: make tree.check
