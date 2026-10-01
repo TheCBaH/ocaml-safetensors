@@ -1,9 +1,9 @@
 # OCaml Safetensors implementation tracker
 
 Updated: 2026-10-01. Repository: `TheCBaH/ocaml-safetensors`.
-Current state: repository created; core and Unix readers implemented on `devel`.
-Local tests, independent corpus conformance, and clean package installs pass.
-Final CI gates are in progress; `main` still contains only the empty root commit.
+Current state: standalone implementation complete and promoted to `main`.
+All required CI jobs passed for implementation commit `212181e`; the final
+tracker-only update follows the same `devel` → CI → `main` workflow.
 
 **Scope guard:** `mltorch` integration and producer sidecar handling are outside
 this tracker. The release must be verified as a standalone library. A future
@@ -20,8 +20,8 @@ Links: [plan](ocaml-safetensors-plan.md) · [design](ocaml-safetensors-design.md
 - **Planned:** waits for the listed prerequisite, with no claim of progress.
 - **In progress / Blocked:** set only while executing; record the actual blocker and next action.
 
-Implementation owner: Codex. When work begins, record an owner, branch,
-commit, CI URL, and evidence below; keep task IDs stable if mirrored to GitHub.
+Implementation owner: Codex. Branch, commit, CI URL, and evidence are recorded
+below; keep task IDs stable if mirrored to GitHub.
 Never mark a skipped test, unavailable fixture, or source inspection as a passing
 runtime verification.
 
@@ -40,7 +40,7 @@ runtime verification.
 | ID | Milestone / task | Status | Depends on | Acceptance evidence required |
 | --- | --- | --- | --- | --- |
 | ST-010 | M0: Recheck names and bootstrap repository | Done | ST-001, ST-005 | Empty `main` root; implementation on `devel`; package identity/license set; scaffolding provenance preserved. |
-| ST-011 | M0: Dune/opam/devcontainer/CI skeleton | In progress | ST-010 | Green build/test/format on OCaml 4.14 and pinned 5.x; sshd present; generated files pristine; no application dependency. |
+| ST-011 | M0: Dune/opam/devcontainer/CI skeleton | Done | ST-010 | Green build/test/format on OCaml 4.14 and pinned 5.x; sshd present; generated files pristine; no application dependency. |
 | ST-012 | M0: Pin and characterize upstream oracle | Done | ST-011 | Wheel/version/hash lock; executed minimal probes for whitespace, duplicates, unknown fields, integer syntax, empties; recorded compatibility table. |
 | ST-020 | M1: Jsont exact-number/duplicate/limits proof | Done | ST-011, ST-012 | Original token extraction above 2^53; all decoded duplicates detected; bounded malformed nesting; minimum supported dependency versions demonstrated in CI. |
 | ST-021 | M1: Public dtype/index/error interfaces | Done | ST-020 | Immutable index, all 13 dtypes, deterministic enumeration, structured errors, documented limits; API checks compile. |
@@ -54,26 +54,26 @@ runtime verification.
 | ST-042 | M3: Locked HF fetch/cache tooling | Done | ST-011, ST-003 | Anonymous immutable URLs; per-file/total cap; fresh/cache hash checks; atomic files; clear timeout/unavailable failure; no silent skip. |
 | ST-043 | M3: Execute full HF conformance | Done | ST-041, ST-042 | Six files, 307 tensors; all bytes/metadata agree across access paths; lock digest + reference/reader versions in CI artifact. |
 | ST-044 | M3: Properties and bounded fuzz replay | Done | ST-023, ST-041 | Seeded 1,000-case PR suite; 10,000-case scheduled target; scalar/zero shapes included; saved/shrunk failures; subprocess limits for stress. |
-| ST-050 | M4: Independent package install smoke tests | In progress | ST-032, ST-040 | Source tarball → clean opam switch → external Dune client; core works without Unix; file package independently installed; runtime works offline without Python/Rust/consumer repos. |
-| ST-051 | M4: Documentation and support matrix | In progress | ST-043, ST-044, ST-050 | API examples, exactness, dtype subset, limits, ownership, file mutation assumptions, tested compiler/platform list; no unsupported portability claims. |
-| ST-052 | M4: Release readiness and promotion | In progress | ST-011, ST-043, ST-044, ST-050, ST-051 | Same reader commit green across required jobs; no unreviewed oracle differences; clean logical commits; `devel` promoted only after evidence; registry updated. |
+| ST-050 | M4: Independent package install smoke tests | Done | ST-032, ST-040 | Source tarball → clean opam switch → external Dune client; core works without Unix; file package independently installed; runtime works offline without Python/Rust/consumer repos. |
+| ST-051 | M4: Documentation and support matrix | Done | ST-043, ST-044, ST-050 | API examples, exactness, dtype subset, limits, ownership, file mutation assumptions, tested compiler/platform list; no unsupported portability claims. |
+| ST-052 | M4: Release readiness and promotion | Done | ST-011, ST-043, ST-044, ST-050, ST-051 | Same reader commit green across required jobs; no unreviewed oracle differences; clean logical commits; `devel` promoted only after evidence; registry updated. |
 
 ## Milestone gates
 
 | Gate | Status | Required tasks |
 | --- | --- | --- |
-| M0 — Standalone skeleton and reference contract | In progress | ST-010–012 |
+| M0 — Standalone skeleton and reference contract | Done | ST-010–012 |
 | M1 — Exact, bounded Jsont header/index | Done | ST-020–023 |
 | M2 — Memory and Unix bytes | Done | ST-030–032 |
 | M3 — Independent conformance | Done | ST-040–044 |
-| M4 — Standalone release readiness | In progress | ST-050–052 |
+| M4 — Standalone release readiness | Done | ST-050–052 |
 
 Critical sequence: bootstrap → reference probes → Jsont proof → index validation
 → memory/Unix readers → differential conformance → release readiness.
 Fixture-fetch tooling and synthetic generation can proceed once their individual
 dependencies are met. This does not require parallel agents.
 
-## Decisions and remaining gates
+## Resolved decisions
 
 | ID | Decision / uncertainty | Resolution |
 | --- | --- | --- |
@@ -125,3 +125,32 @@ switch installed each package separately and compiled external core and Unix
 clients. Both clients ran with an empty environment and no runtime tools on
 PATH. The 10,000-case stress run passed (seed 1337). CI additionally requires
 network namespaces for external clients and differential verification.
+
+### 2026-10-01 completed standalone verification
+
+Implementation commit: `212181ee01a94b1a67138de57326fbc95ba6b0d5`.
+[Required CI run](https://github.com/TheCBaH/ocaml-safetensors/actions/runs/36808144441)
+passed all five jobs before promotion to `main`:
+
+- Core build/tests/format and pristine generated files on OCaml 4.14.3 with
+  Jsont 0.2.0/Dune 3.17.2, and OCaml 5.3.0 with Jsont 0.4.0/Dune 3.24.0.
+- Shared devcontainer build, tests, and formatting.
+- Network-isolated synthetic/reference/HF comparisons and 10,000-case stress
+  (seed 1337); artifacts `standalone-conformance` include `synthetic.json`,
+  `hub.json`, and `stress.txt`. Both reports record a clean reader tree.
+- Fresh OCaml 4.14.3 switch, separately installed core and Unix packages,
+  external Dune clients run in network namespaces with an empty environment
+  and no runtime tools on PATH. Artifact `standalone-install` records the
+  compiler/packages and `network namespace required: 1`.
+
+Fixture-lock SHA-256:
+`0e3284152d3a2dc9838fc44f96a5266c09b15a73c7259e4c100105a75993ad40`.
+Reference-wheel lock SHA-256:
+`076f9e5b514da83387768c0db9f26eb1069e1c506e973f0916881afb1ca72cc9`.
+Every reference acceptance difference is asserted and documented in
+[compatibility](docs/compatibility.md). ST-010 through ST-052 are complete.
+
+The workspace registry records the repository and evidence. The authorized
+local development container and build artifacts have been removed; no
+Codespaces remain. No public opam submission or version tag is part of this
+completion. `mltorch` integration remains explicitly outside this project.
