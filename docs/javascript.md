@@ -126,9 +126,34 @@ parity or browser-engine coverage beyond tested Chromium is claimed.
 
 | ID | Status | Evidence |
 | --- | --- | --- |
-| JS-001 | Implemented; CI pending | Real installed jsoo dependencies and shared core suite |
-| JS-002 | Implemented; CI pending | Injected fixtures; common Node/Chromium conformance runner |
-| JS-003 | Implemented; CI pending | Uint8Array copy adapter and ownership/invalid-buffer tests |
-| JS-004 | Implemented; CI pending | Real dependency compilation; scoped Bigarray polyfill and explicit Jsont patch |
-| JS-005 | Implemented; CI pending | Optional Melange package and independent installed client |
-| JS-006 | CI pending | Devcontainer workflows, offline conformance, native regressions and version/size/RSS reports |
+| JS-001 | Done | Real installed jsoo dependencies and shared core suite |
+| JS-002 | Done | Injected fixtures; common Node/Chromium conformance runner |
+| JS-003 | Done | Uint8Array copy adapter and ownership/invalid-buffer tests |
+| JS-004 | Done | Real dependency compilation; scoped Bigarray polyfill and explicit Jsont patch |
+| JS-005 | Done | Optional Melange package and independent installed client |
+| JS-006 | Done | Devcontainer workflows, offline conformance, native regressions and version/size/RSS reports |
+
+
+## Completed CI evidence
+
+Reader commit `66fc2950f49721b4aaf8ec94b68274e0acbbc9fc` passed
+[all three devcontainer CI jobs](https://github.com/TheCBaH/ocaml-safetensors/actions/runs/36862925122)
+on 2026-10-01. Both native compiler/dependency matrices passed, including the
+minimum Dune 3.17.2/bytesrw 0.2.0 configuration. Fresh native package installation
+uses its own opam root and compiler; external clients run with no runtime tools
+on PATH and no networking. The 10,000-case native stress run passed with seed
+1337. Committed feature locks keep both container configurations pristine.
+
+JavaScript artifacts confirm Node 24.19.0 and Chromium 141.0.7390.37, with
+45 cases and 337 tensor visits per backend per environment, plus 9 invalid
+buffer cases in Node and 8 in Chromium. Both external installed clients passed.
+
+| Backend | Conformance browser bundle (bytes) | Node test process peak RSS (bytes) |
+| --- | ---: | ---: |
+| jsoo | 3,265,776 | 581,472,256 |
+| Melange | 1,569,612 | 574,353,408 |
+
+These figures include test code, embedded fixtures and comparison allocations,
+as described above. Artifacts `standalone-javascript` and `standalone-native`
+contain the package/version reports, corpus hashes, byte comparisons, stress
+result and independent-installation evidence. JS-001 through JS-006 are complete.

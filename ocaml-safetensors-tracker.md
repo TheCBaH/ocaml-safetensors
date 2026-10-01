@@ -154,3 +154,18 @@ The workspace registry records the repository and evidence. The authorized
 local development container and build artifacts have been removed; no
 Codespaces remain. No public opam submission or version tag is part of this
 completion. `mltorch` integration remains explicitly outside this project.
+
+
+### 2026-10-01 JavaScript backends completed
+
+JS-001 through JS-006 are complete; implementation details, package usage and
+measurements are maintained in [JavaScript backends](docs/javascript.md).
+Reader commit `66fc295` passed all three devcontainer jobs in
+[CI run 36862925122](https://github.com/TheCBaH/ocaml-safetensors/actions/runs/36862925122):
+minimum/current native matrices, private-opam-root native installs, native
+upstream/HF comparisons and 10,000 stress cases, both real Jsont JS backends
+under Node 24.19.0/Chromium 141.0.7390.37 without networking, independent installed
+JS clients and pristine source trees. The Melange Bigarray polyfill is scoped
+to Array1; metadata integers and raw bytes retain the common reader semantics.
+All build and verification helpers use Makefile targets. mltorch integration,
+public opam/npm publication and release tags remain outside this delivery.
