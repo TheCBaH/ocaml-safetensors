@@ -1,0 +1,28 @@
+{
+  "files": {
+    "bf16.safetensors": {
+      "sha256": "c9f0621153633fee2063d63f24cd1dbb364380b5e31986fc8e101707ac11a902",
+      "size_bytes": 83
+    },
+    "empty.safetensors": {
+      "sha256": "411a485216e432ece6b9af94fa32154cf79a2a56d4f81266baa50063f45092bd",
+      "size_bytes": 10
+    },
+    "layout.safetensors": {
+      "sha256": "858ea8381a4cf227c75367f22481205ea291abfe7deba662c4334ba91b006798",
+      "size_bytes": 170
+    },
+    "metadata.safetensors": {
+      "sha256": "d214acd98601652c6f19271ec566812a3a109b713ccabf0f7021fa5af0b4185e",
+      "size_bytes": 68
+    },
+    "numpy-all.safetensors": {
+      "sha256": "0b2a0b0ad29a9424452e205202814bb201a14ab0af36c8034dab681f3ac54a08",
+      "size_bytes": 1294
+    }
+  },
+  "generator": "scripts/generate_fixtures.py",
+  "license": "MIT",
+  "numpy": "2.2.6",
+  "safetensors": "0.8.0"
+}
