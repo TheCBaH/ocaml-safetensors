@@ -466,8 +466,8 @@ module Memory = struct
     | Some tensor ->
         let b, _ = Tensor.data_offsets tensor in
         let start = Int64.to_int (Int64.add (Index.data_start t.index) b) in
-        Ok
-          (Bytes.of_string
-             (String.sub t.data start
-                (Int64.to_int (Tensor.byte_length tensor))))
+        let length = Int64.to_int (Tensor.byte_length tensor) in
+        let bytes = Bytes.create length in
+        Bytes.blit_string t.data start bytes 0 length;
+        Ok bytes
 end

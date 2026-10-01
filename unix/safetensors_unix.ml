@@ -11,17 +11,7 @@ let io f =
       (Error.make Error.Io
          (Printf.sprintf "%s(%s): %s" call arg (Unix.error_message e)))
 
-let rec read_exact fd buf off len =
-  if len = 0 then Ok ()
-  else
-    let n =
-      try Unix.read fd buf off len
-      with Unix.Unix_error (Unix.EINTR, _, _) -> -1
-    in
-    if n = -1 then read_exact fd buf off len
-    else if n = 0 then
-      Error (Error.make Error.Truncated "unexpected end of file")
-    else read_exact fd buf (off + n) (len - n)
+let read_exact = Safetensors_io.read_exact
 
 let close t =
   if not t.closed then (

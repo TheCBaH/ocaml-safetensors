@@ -1,4 +1,4 @@
 (library
  (name safetensors_unix)
  (public_name safetensors-unix)
- (libraries safetensors unix))
+ (libraries safetensors safetensors_io unix))

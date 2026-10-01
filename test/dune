@@ -1,6 +1,8 @@
 (test
  (name test_core)
  (modules test_core)
+ (deps
+  (glob_files fixtures/*.safetensors))
  (package safetensors)
  (libraries safetensors))
 
@@ -8,4 +10,9 @@
  (name test_reader)
  (modules test_reader)
  (package safetensors-unix)
- (libraries safetensors safetensors-unix unix))
+ (libraries safetensors safetensors-unix safetensors_io unix))
+
+(executable
+ (name conformance)
+ (modules conformance)
+ (libraries safetensors safetensors-unix jsont jsont.bytesrw))

@@ -1,0 +1,4 @@
+(library
+ (name safetensors_io)
+ (package safetensors-unix)
+ (libraries safetensors unix))

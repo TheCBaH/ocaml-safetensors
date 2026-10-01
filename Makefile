@@ -8,6 +8,8 @@ format:
 clean:
 	opam exec -- dune clean
 test.interop: build
+	python3 scripts/generate_fixtures.py
+	python3 scripts/test_fetch_fixtures.py
 	python3 scripts/conformance.py synthetic
 fixtures.fetch:
 	python3 scripts/fetch_fixtures.py
