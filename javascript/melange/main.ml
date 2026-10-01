@@ -1,9 +1,14 @@
+module Adapter = Safetensors_melange
+
+external nativeint_of_int : int -> nativeint = "%identity"
+
 let () =
   Core_cases.run ();
   Core_cases.fixtures (fun name ->
       Core_cases.get
         (Safetensors.Memory.of_string (List.assoc name Fixtures.files)));
   Test_bigarray.run ();
+  Test_bigarray.nativeints nativeint_of_int;
   let open_buffer = Adapter.Reader.of_uint8array in
   let describe = Describe.result in
   let copy r name =

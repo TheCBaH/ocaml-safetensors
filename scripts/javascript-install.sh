@@ -20,6 +20,7 @@ if [ "$backend" = melange ]; then
  (preprocess (pps melange.ppx)))
 EOF
   cat > "$client/main.ml" <<'EOF'
+module Adapter = Safetensors_melange
 let bytes : Adapter.Byte_buffer.t = [%mel.raw "new Uint8Array([2,0,0,0,0,0,0,0,123,125])"]
 let () =
   assert (Result.is_ok (Adapter.Reader.of_uint8array bytes));
@@ -33,6 +34,7 @@ else
 EOF
   cat > "$client/main.ml" <<'EOF'
 open Js_of_ocaml
+module Adapter = Safetensors_jsoo
 let bytes = Js.Unsafe.js_expr "new Uint8Array([2,0,0,0,0,0,0,0,123,125])"
 let () =
   assert (Result.is_ok (Adapter.Reader.of_uint8array bytes));

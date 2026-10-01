@@ -7,6 +7,16 @@ let invalid f =
   with Invalid_argument _ -> ()
 
 let run () =
+  let check kind value expected =
+    let array = Array1.init kind c_layout 1 (fun _ -> value) in
+    assert (Array1.get array 0 = expected);
+    assert (Array1.kind array = kind && Array1.layout array = c_layout)
+  in
+  check Int16_signed 32768 (-32768);
+  check Int16_unsigned 65537 1;
+  check Int32 Int32.min_int Int32.min_int;
+  check Int 2147483647 2147483647;
+  check Char '\255' '\255';
   let b = Array1.init Int8_unsigned c_layout 256 Fun.id in
   assert (Array1.dim b = 256);
   for i = 0 to 255 do
@@ -42,3 +52,8 @@ let run () =
   print_endline
     "Bigarray Array1: layouts, bounds, narrowing, int64 and dependency \
      consumers"
+
+let nativeints from_int =
+  let value = from_int 2147483647 in
+  let array = Array1.init Nativeint c_layout 1 (fun _ -> value) in
+  assert (Array1.get array 0 = value)

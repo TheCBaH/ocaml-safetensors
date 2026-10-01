@@ -27,6 +27,9 @@ function verify(api, cases, equal, ok) {
     }
   }
   const invalid = [null, {}, 'abc', new Uint16Array(2), new DataView(new ArrayBuffer(8))];
+  const spoofed = new Uint16Array(2);
+  Object.defineProperty(spoofed, Symbol.toStringTag, {value:'Uint8Array'});
+  invalid.push(spoofed);
   if (typeof SharedArrayBuffer !== 'undefined') invalid.push(new Uint8Array(new SharedArrayBuffer(8)));
   if (typeof structuredClone === 'function') {
     const view = new Uint8Array(8);

@@ -1,3 +1,4 @@
+module Adapter = Safetensors_jsoo
 open Js_of_ocaml
 
 let () =
@@ -6,6 +7,7 @@ let () =
       Core_cases.get
         (Safetensors.Memory.of_string (List.assoc name Fixtures.files)));
   Test_bigarray.run ();
+  Test_bigarray.nativeints Nativeint.of_int;
   Js.export "safetensors"
     object%js
       method open_ view = Adapter.Reader.of_uint8array (Js.Unsafe.coerce view)

@@ -30,7 +30,7 @@ if [ "$backend" = jsoo ]; then
 (package (name safetensors-jsoo))
 EOF
   cat > "$work/adapter/dune" <<'EOF'
-(library (name adapter) (public_name safetensors-jsoo)
+(library (name safetensors_jsoo) (public_name safetensors-jsoo)
  (libraries safetensors js_of_ocaml))
 EOF
   cat > "$work/dune" <<'EOF'
@@ -71,7 +71,7 @@ EOF
  (modes melange) (libraries safetensors-melange.jsont safetensors-melange.codec))
 EOF
   cat > "$work/adapter/dune" <<'EOF'
-(library (name adapter) (public_name safetensors-melange)
+(library (name safetensors_melange) (public_name safetensors-melange)
  (modes melange) (libraries safetensors-melange.core)
  (preprocess (pps melange.ppx)))
 EOF
@@ -99,5 +99,8 @@ EOF
         (bytesrw-0.3.0/LICENSE.md as bytesrw-LICENSE.md)))
 EOF
 fi
+cat >> "$work/dune" <<'EOF'
+(dirs :standard \ client installed)
+EOF
 cd "$work"
 opam exec -- dune build --root . @all

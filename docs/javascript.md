@@ -31,7 +31,8 @@ opam exec -- dune install --prefix /your/prefix safetensors-jsoo
 # Melange: safetensors-melange
 ```
 
-Link `safetensors-jsoo` or `safetensors-melange`. Both expose `Adapter.Reader`:
+Link `safetensors-jsoo` or `safetensors-melange`. The wrapper module is `Safetensors_jsoo` or `Safetensors_melange`.
+With `module Adapter = Safetensors_jsoo` (or the Melange wrapper), both expose:
 
 ```ocaml
 val of_uint8array :
