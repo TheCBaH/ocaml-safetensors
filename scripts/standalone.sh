@@ -10,6 +10,9 @@ trap cleanup EXIT
 mkdir -p "$work/source" "$work/client"
 git -C "$root" archive HEAD | tar -x -C "$work/source"
 compiler=$(ocamlc -version)
+unset OPAMSWITCH
+export OPAMROOT="$work/opam"
+opam init --bare --no-setup --disable-sandboxing --yes
 opam switch create "$work/switch" "ocaml-base-compiler.$compiler" --yes
 opam pin add --switch "$work/switch" safetensors.0.1.0 "$work/source" --no-action --yes
 opam install --switch "$work/switch" safetensors --with-test --yes

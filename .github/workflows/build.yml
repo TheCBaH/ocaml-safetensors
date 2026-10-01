@@ -11,7 +11,7 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  core:
+  native:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -19,82 +19,71 @@ jobs:
         include:
           - ocaml: '4.14.3'
             jsont: '0.2.0'
+            bytesrw: '0.2.0'
             dune: '3.17.2'
           - ocaml: '5.3.0'
             jsont: '0.4.0'
-            dune: '3.24.0'
+            bytesrw: '0.3.0'
+            dune: '3.24.2'
     steps:
       - uses: actions/checkout@v7
-      - uses: ocaml/setup-ocaml@v3
+      - uses: TheCBaH/devcontainer-action/devcontainer@v1
+        id: container
+        env:
+          OCAML_VERSION: ${{ matrix.ocaml }}
+          JSONT_VERSION: ${{ matrix.jsont }}
+          BYTESRW_VERSION: ${{ matrix.bytesrw }}
+          DUNE_VERSION: ${{ matrix.dune }}
         with:
-          ocaml-compiler: ${{ matrix.ocaml }}
-      - name: Install dependencies
-        run: opam install -y dune.${{ matrix.dune }} jsont.${{ matrix.jsont }} bytesrw ocamlformat.0.29.0
-      - run: make build runtest format
+          variant: ${{ matrix.ocaml }}
+          username: ${{ github.actor }}
+          password: ''
+      - name: Build, test and format
+        env:
+          OCAML_VERSION: ${{ matrix.ocaml }}
+          JSONT_VERSION: ${{ matrix.jsont }}
+          BYTESRW_VERSION: ${{ matrix.bytesrw }}
+          DUNE_VERSION: ${{ matrix.dune }}
+        run: ${{ steps.container.outputs.exec }} make build runtest format
+      - name: Prepare pinned upstream corpus
+        if: matrix.ocaml == '4.14.3'
+        run: ${{ steps.container.outputs.exec }} make js.reference fixtures.fetch
+      - name: Independent conformance without networking
+        if: matrix.ocaml == '4.14.3'
+        run: ${{ steps.container.outputs.exec }} make test.native.offline
+      - name: Fresh standalone installation
+        if: matrix.ocaml == '4.14.3'
+        run: ${{ steps.container.outputs.exec }} env SAFETENSORS_REQUIRE_NETNS=1 make test.standalone
+      - name: Store native evidence
+        if: always() && matrix.ocaml == '4.14.3'
+        uses: actions/upload-artifact@v6
+        with:
+          name: standalone-native
+          path: .cache/reports/
+          if-no-files-found: warn
       - name: Verify generated files
-        run: |
-          git status --short
-          git diff --exit-code
-          test -z "$(git status --porcelain)"
-  devcontainer:
+        run: make tree.check
+  javascript:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: TheCBaH/devcontainer-action/devcontainer@v1
         id: container
-      - name: Build and test in development image
-        run: ${{ steps.container.outputs.exec }} make build runtest format
-  interop:
-    runs-on: ubuntu-latest
-    env:
-      SAFETENSORS_FAILURE_FILE: ${{ github.workspace }}/.cache/reports/property-failure.safetensors
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: '5.3.0'
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13.5'
-      - name: Install pinned reference and reader dependencies
-        run: |
-          opam install -y dune.3.24.0 jsont.0.4.0 bytesrw
-          python -m pip install --only-binary=:all: --require-hashes -r scripts/reference-requirements.txt
-      - run: make build
-      - name: Fetch and verify locked corpus
-        run: make fixtures.fetch
-      - name: Independent tests without networking
-        run: |
-          mkdir -p .cache/reports
-          bash scripts/offline.sh "$(command -v python)" scripts/generate_fixtures.py
-          bash scripts/offline.sh "$(command -v python)" scripts/test_fetch_fixtures.py
-          bash scripts/offline.sh "$(command -v python)" scripts/conformance.py synthetic
-          bash scripts/offline.sh "$(command -v python)" scripts/conformance.py hub
-          bash scripts/offline.sh env SAFETENSORS_CASES=10000 SAFETENSORS_FAILURE_FILE="$SAFETENSORS_FAILURE_FILE" _build/default/test/test_reader.exe | tee .cache/reports/stress.txt
-      - name: Store conformance evidence
+          config: .devcontainer/javascript/devcontainer.json
+          variant: javascript
+          username: ${{ github.actor }}
+          password: ''
+      - name: Prepare compilers, browser and verified corpus
+        run: ${{ steps.container.outputs.exec }} make js.deps js.reference js.build.jsoo js.build.melange js.corpus
+      - name: Standalone Node, browser and installed clients
+        run: ${{ steps.container.outputs.exec }} make test.javascript.offline
+      - name: Store JavaScript evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: standalone-conformance
+          name: standalone-javascript
           path: .cache/reports/
-          if-no-files-found: error
-      - name: Verify committed fixtures
-        run: git diff --exit-code
-  standalone-install:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: '4.14.3'
-      - name: Install source packages in a fresh switch
-        env:
-          SAFETENSORS_REQUIRE_NETNS: '1'
-        run: opam exec -- bash scripts/standalone.sh
-      - name: Store installation evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: standalone-install
-          path: .cache/reports/standalone.txt
           if-no-files-found: warn
+      - name: Verify generated files
+        run: make tree.check

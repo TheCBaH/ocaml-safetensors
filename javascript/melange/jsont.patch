@@ -1,0 +1,369 @@
+--- a/src/jsont.ml
++++ b/src/jsont.ml
+@@ -21,7 +21,7 @@
+ type context_index = string node * Path.index
+ type context = context_index list
+ type error = context * Meta.t * error_kind
+-exception Error of error
++exception Decode_error of error
+ 
+ module Error = struct
+ 
+@@ -61,17 +61,17 @@
+   type t = error
+ 
+   let make_msg ctx meta msg = ctx, meta, msg
+-  let raise ctx meta msg = raise_notrace (Error (ctx, meta, msg))
+-  let msg meta msg = raise_notrace (Error (Context.empty, meta, msg))
++  let raise ctx meta msg = raise_notrace (Decode_error (ctx, meta, msg))
++  let msg meta msg = raise_notrace (Decode_error (Context.empty, meta, msg))
+   let msgf meta fmt = Format.kasprintf (fun m -> msg meta m) fmt
+   let push_array kinded_sort n (ctx, meta, e) =
+-    raise_notrace (Error (Context.push_array kinded_sort n ctx, meta, e))
++    raise_notrace (Decode_error (Context.push_array kinded_sort n ctx, meta, e))
+ 
+   let push_object kinded_sort n (ctx, meta, e) =
+-    raise_notrace (Error (Context.push_object kinded_sort n ctx, meta, e))
++    raise_notrace (Decode_error (Context.push_object kinded_sort n ctx, meta, e))
+ 
+   let adjust_context ~first_byte ~first_line (ctx, meta, e) = match ctx with
+-  | [] -> raise_notrace (Error (ctx, meta, e))
++  | [] -> raise_notrace (Decode_error (ctx, meta, e))
+   | ((sort, smeta), idx) :: is ->
+       let textloc = Meta.textloc smeta in
+       let textloc =
+@@ -80,7 +80,7 @@
+       in
+       let smeta = Meta.with_textloc smeta textloc in
+       let ctx = ((sort, smeta), idx) :: is in
+-      raise_notrace (Error (ctx, meta, e))
++      raise_notrace (Decode_error (ctx, meta, e))
+ 
+   let pp ppf (ctx, m, msg) =
+     let pp_meta ppf m =
+@@ -1481,7 +1481,7 @@
+           try
+             if map.dec_skip i b then b else
+             map.dec_add i (decode map.elt v) b
+-          with Error e -> Repr.error_push_array meta map (i, get_meta v) e
++          with Decode_error e -> Repr.error_push_array meta map (i, get_meta v) e
+         in
+         next map meta b (i + 1) vs
+     in
+@@ -1530,7 +1530,7 @@
+       match String_map.find_opt n mem_decs with
+       | Some (Mem_dec m) ->
+           let dict = try Dict.add m.id (decode m.type' v) dict with
+-          | Error e -> Repr.error_push_object meta map nm e
++          | Decode_error e -> Repr.error_push_object meta map nm e
+           in
+           let mem_miss = String_map.remove n mem_miss in
+           decode_object_basic map meta umems umap mem_miss mem_decs dict mems
+@@ -1545,7 +1545,7 @@
+           | Unknown_keep (umap', _) ->
+               let umap =
+                 try umap'.dec_add nmeta n (decode umap'.mems_type v) umap with
+-                | Error e -> Repr.error_push_object meta map nm e
++                | Decode_error e -> Repr.error_push_object meta map nm e
+               in
+               decode_object_basic
+                 map meta umems umap mem_miss mem_decs dict mems
+@@ -1581,7 +1581,7 @@
+     | ((n, meta as nm), v as mem) :: mems ->
+         if n = cases.tag.name then
+           let tag = try decode cases.tag.type' v with
+-          | Error e -> Repr.error_push_object meta map nm e
++          | Decode_error e -> Repr.error_push_object meta map nm e
+           in
+           decode_case_tag map meta tag delay mems
+         else
+@@ -1592,7 +1592,7 @@
+               map meta umems cases mem_miss mem_decs dict delay mems
+         | Some (Mem_dec m) ->
+             let dict = try Dict.add m.id (decode m.type' v) dict with
+-            | Error e -> Repr.error_push_object meta map nm e
++            | Decode_error e -> Repr.error_push_object meta map nm e
+             in
+             let mem_miss = String_map.remove n mem_miss in
+             decode_object_cases
+@@ -1612,7 +1612,7 @@
+     | Object _ -> dec t map.dec_object j
+ 
+   let dec = decode
+-  let decode' t j = try Ok (decode t j) with Error e -> Result.Error e
++  let decode' t j = try Ok (decode t j) with Decode_error e -> Result.Error e
+   let decode t j = Result.map_error Error.to_string (decode' t j)
+ 
+   (* Encode *)
+@@ -1626,7 +1626,7 @@
+   | Array map ->
+       let enc map acc i elt =
+         try encode map.elt elt :: acc with
+-        | Error e -> Repr.error_push_array Meta.none map (i, Meta.none) e
++        | Decode_error e -> Repr.error_push_array Meta.none map (i, Meta.none) e
+       in
+       list ~meta:(map.enc_meta v) (List.rev (map.enc (enc map) [] v))
+   | Object map ->
+@@ -1646,7 +1646,7 @@
+         if mmap.enc_omit v then obj else
+         ((mmap.name, Meta.none), encode mmap.type' v) :: obj
+       with
+-      | Error e -> Repr.error_push_object Meta.none map (mmap.name, Meta.none) e
++      | Decode_error e -> Repr.error_push_object Meta.none map (mmap.name, Meta.none) e
+     in
+     let obj = List.fold_left (encode_mem map) obj map.mem_encs in
+     match map.shape with
+@@ -1661,7 +1661,7 @@
+             if cases.tag.enc_omit case.tag then obj else
+             (n, encode cases.tag.type' case.tag) :: obj
+           with
+-          | Error e -> Repr.error_push_object Meta.none map n e
++          | Decode_error e -> Repr.error_push_object Meta.none map n e
+         in
+         match u with
+         | Some (Unknown_keep (umap, enc)) ->
+@@ -1678,20 +1678,20 @@
+      let encode_mem map meta name v obj =
+        let n = (name, meta) in
+        let v = try encode umap.mems_type v with
+-       | Error e -> Repr.error_push_object Meta.none map n e
++       | Decode_error e -> Repr.error_push_object Meta.none map n e
+        in
+        (n, v) :: obj
+      in
+      (umap.enc (encode_mem map) mems obj)
+ 
+    let enc = encode
+-   let encode' t v = try Ok (encode t v) with Error e -> Result.Error e
++   let encode' t v = try Ok (encode t v) with Decode_error e -> Result.Error e
+    let encode t v = Result.map_error Error.to_string (encode' t v)
+ 
+    (* Recode *)
+ 
+    let update t v = enc t (dec t v)
+-   let recode' t v = try Ok (update t v) with Error e -> Result.Error e
++   let recode' t v = try Ok (update t v) with Decode_error e -> Result.Error e
+    let recode t v = Result.map_error Error.to_string (recode' t v)
+ end
+ 
+--- a/src/jsont.mli
++++ b/src/jsont.mli
+@@ -464,7 +464,7 @@
+   (**/**)
+ end
+ 
+-exception Error of Error.t
++exception Decode_error of Error.t
+ (** The exception raised on map errors. In general codec and query
+     functions turn that for you into a {!result} value. *)
+ 
+--- a/src/jsont_base.ml
++++ b/src/jsont_base.ml
+@@ -95,11 +95,13 @@
+   type (_, _) eq = Equal : ('a, 'a) eq
+   module Id = struct
+     type _ id = ..
+-    module type ID = sig type t type _ id += Id : t id end
++    module type ID = sig type t type _ id += Id : t id val uid : int end
++    let next_uid = ref 0
+     type 'a t = (module ID with type t = 'a)
+ 
+     let make (type a) () : a t =
+-      (module struct type t = a type _ id += Id : t id end)
++      (module struct type t = a type _ id += Id : t id
++        let uid = incr next_uid; !next_uid end)
+ 
+     let provably_equal
+         (type a b) ((module A) : a t) ((module B) : b t) : (a, b) eq option
+@@ -107,7 +109,7 @@
+       match A.Id with B.Id -> Some Equal | _ -> None
+ 
+     let uid (type a) ((module A) : a t) =
+-      Obj.Extension_constructor.id (Obj.Extension_constructor.of_val A.Id)
++      A.uid
+   end
+ end
+ 
+--- a/src/bytesrw/jsont_bytesrw.ml
++++ b/src/bytesrw/jsont_bytesrw.ml
+@@ -476,7 +476,7 @@
+               then (decode d (of_t Jsont.ignore))
+               else (b := map.dec_add !i (decode d map.elt) !b)
+             with
+-            | Jsont.Error e ->
++            | Jsont.Decode_error e ->
+                 let imeta = error_meta_to_current ~first_byte ~first_line d in
+                 Jsont.Repr.error_push_array (error_meta d) map (!i, imeta) e
+           end;
+@@ -489,7 +489,7 @@
+         done;
+         !b, !i
+       with
+-      | Jsont.Error e -> Jsont.Error.adjust_context ~first_byte ~first_line e
++      | Jsont.Decode_error e -> Jsont.Error.adjust_context ~first_byte ~first_line e
+   in
+   let textloc = textloc_to_current d ~first_byte ~first_line in
+   let ws_after = nextc d; read_ws d; ws_pop d in
+@@ -507,7 +507,7 @@
+         d map (Unknown_mems None) String_map.empty String_map.empty []
+         Dict.empty
+     with
+-    | Jsont.Error (ctx, meta, k) when Jsont.Error.Context.is_empty ctx ->
++    | Jsont.Decode_error (ctx, meta, k) when Jsont.Error.Context.is_empty ctx ->
+         let meta =
+           (* This is for when Jsont.Repr.finish_object_decode raises. *)
+           if Jsont.Textloc.is_none (Jsont.Meta.textloc meta)
+@@ -515,7 +515,7 @@
+           else meta
+         in
+         Jsont.Error.raise ctx meta k
+-    | Jsont.Error e -> Jsont.Error.adjust_context ~first_byte ~first_line e
++    | Jsont.Decode_error e -> Jsont.Error.adjust_context ~first_byte ~first_line e
+   in
+   let textloc = textloc_to_current d ~first_byte ~first_line in
+   let ws_after = nextc d; read_ws d; ws_pop d in
+@@ -540,11 +540,11 @@
+               let t = Jsont.Repr.unsafe_to_t m.type' in
+               let v = match Jsont.Json.decode' t v with
+               | Ok v -> v
+-              | Error e -> raise_notrace (Jsont.Error e)
++              | Error e -> raise_notrace (Jsont.Decode_error e)
+               in
+               Dict.add m.id v dict
+             with
+-            | Jsont.Error e ->
++            | Jsont.Decode_error e ->
+                 Jsont.Repr.error_push_object (error_meta d) map nm e
+           in
+           let mem_miss = String_map.remove name mem_miss in
+@@ -586,11 +586,11 @@
+               let t = Jsont.Repr.unsafe_to_t umap.mems_type in
+               let v = match Jsont.Json.decode' t v with
+               | Ok v -> v
+-              | Error e -> raise_notrace (Jsont.Error e)
++              | Error e -> raise_notrace (Jsont.Decode_error e)
+               in
+               umap.dec_add meta n v umems
+             with
+-            | Jsont.Error e ->
++            | Jsont.Decode_error e ->
+                 Jsont.Repr.error_push_object (error_meta d) map nm e
+           in
+           let umems = List.fold_left add_delay (umap.dec_empty ()) delay in
+@@ -611,7 +611,7 @@
+     | Some (Mem_dec mem) ->
+         let mem_miss = String_map.remove name mem_miss in
+         let dict = try Dict.add mem.id (decode d mem.type') dict with
+-        | Jsont.Error e ->
++        | Jsont.Decode_error e ->
+             Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+         in
+         read_json_mem_sep d;
+@@ -620,7 +620,7 @@
+         match u with
+         | Unknown_skip ->
+             let () = try decode d (Jsont.Repr.of_t Jsont.ignore) with
+-            | Jsont.Error e ->
++            | Jsont.Decode_error e ->
+                 Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+             in
+             read_json_mem_sep d;
+@@ -631,7 +631,7 @@
+         | Unknown_keep (umap', _) ->
+             let umap =
+               try umap'.dec_add meta name (decode d umap'.mems_type) umap with
+-              | Jsont.Error e ->
++              | Jsont.Decode_error e ->
+                   Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+             in
+             read_json_mem_sep d;
+@@ -651,7 +651,7 @@
+     match List.find_opt eq_tag cases.cases with
+     | None ->
+         (try Jsont.Repr.unexpected_case_tag_error (error_meta d) map cases tag
+-         with Jsont.Error e ->
++         with Jsont.Decode_error e ->
+            Jsont.Repr.error_push_object
+              (error_meta d) map (cases.tag.name, nmeta) e)
+     | Some (Case case) ->
+@@ -676,7 +676,7 @@
+       let name = token_pop d in
+       if String.equal name cases.tag.name then
+         let tag = try decode d cases.tag.type' with
+-        | Jsont.Error e ->
++        | Jsont.Decode_error e ->
+             Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+         in
+         decode_case_tag
+@@ -686,7 +686,7 @@
+       | Some (Mem_dec mem) ->
+           let mem_miss = String_map.remove name mem_miss in
+           let dict = try Dict.add mem.id (decode d mem.type') dict with
+-          | Jsont.Error e ->
++          | Jsont.Decode_error e ->
+               Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+           in
+           read_json_mem_sep d;
+@@ -695,7 +695,7 @@
+           (* Because JSON can be out of order we don't know how to decode
+              this yet. Generic decode *)
+           let v = try decode d (Jsont.Repr.of_t Jsont.json) with
+-          | Jsont.Error e ->
++          | Jsont.Decode_error e ->
+               Jsont.Repr.error_push_object (error_meta d) map (name, meta) e
+           in
+           let delay = ((name, meta), v) :: delay in
+@@ -725,7 +725,7 @@
+     let d = make_decoder ?layout ?locs ?file reader in
+     let v = (nextc d; decode d (Jsont.Repr.of_t t)) in
+     if d.u <> eot then err_exp_eot d else Ok v
+-  with Jsont.Error e -> Error e
++  with Jsont.Decode_error e -> Error e
+ 
+ let decode ?layout ?locs ?file t reader =
+   Result.map_error Jsont.Error.to_string (decode' ?layout ?locs ?file t reader)
+@@ -892,7 +892,7 @@
+   let encode_element ~nest map e i v =
+     if i <> 0 then write_sep e;
+     try encode ~nest map.elt e v; e with
+-    | Jsont.Error e ->
++    | Jsont.Decode_error e ->
+         Jsont.Repr.error_push_array Jsont.Meta.none map (i, Jsont.Meta.none) e
+   in
+   match e.format with
+@@ -913,7 +913,7 @@
+         write_char e '\n';
+         write_indent e ~nest;
+         try encode ~nest map.elt e v; e with
+-        | Jsont.Error e ->
++        | Jsont.Decode_error e ->
+             Jsont.Repr.error_push_array
+               Jsont.Meta.none map (i, Jsont.Meta.none) e
+       in
+@@ -971,7 +971,7 @@
+       false
+       end
+     with
+-    | Jsont.Error e ->
++    | Jsont.Decode_error e ->
+         Jsont.Repr.error_push_object Jsont.Meta.none map
+           (mmap.name, Jsont.Meta.none) e
+   in
+@@ -1016,7 +1016,7 @@
+       encode_mem_name e meta n;
+       encode ~nest umap.mems_type e v; false
+     with
+-    | Jsont.Error e ->
++    | Jsont.Decode_error e ->
+         Jsont.Repr.error_push_object Jsont.Meta.none map (n, Jsont.Meta.none) e
+   in
+   umap.enc (encode_unknown_mem ~nest map umap e) mems start
+@@ -1025,7 +1025,7 @@
+   let e = make_encoder ?buf ?format ?number_format w in
+   let t = Jsont.Repr.of_t t in
+   try Ok (encode ~nest:0 t e v; write_eot ~eod e) with
+-  | Jsont.Error e -> Error e
++  | Jsont.Decode_error e -> Error e
+ 
+ let encode ?buf ?format ?number_format t v ~eod w =
+   Result.map_error Jsont.Error.to_string @@

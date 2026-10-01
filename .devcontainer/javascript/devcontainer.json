@@ -1,7 +1,7 @@
 {
-  "name": "ocaml-safetensors",
+  "name": "ocaml-safetensors-javascript",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "../Dockerfile"
   },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
@@ -10,9 +10,12 @@
     },
     "ghcr.io/devcontainers/features/sshd:1": {},
     "ghcr.io/thecbah/ocaml-features/ocaml:1": {
-      "version": "${localEnv:OCAML_VERSION:4.14.3}",
-      "packages": "bytesrw#${localEnv:BYTESRW_VERSION:0.2.0} dune#${localEnv:DUNE_VERSION:3.17.2} jsont#${localEnv:JSONT_VERSION:0.2.0} ocamlformat#0.29.0",
+      "version": "4.14.3",
+      "packages": "bytesrw#0.3.0 dune#3.24.2 js_of_ocaml#6.4.1 js_of_ocaml-compiler#6.4.1 js_of_ocaml-ppx#6.4.1 jsont#0.2.0 melange#7.0.1-414 ocamlformat#0.29.0",
       "base-packages": ""
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.19.0"
     }
   },
   "remoteUser": "vscode",

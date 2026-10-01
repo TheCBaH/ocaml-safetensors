@@ -1,3 +1,4 @@
+PYTHON ?= python3
 .PHONY: build runtest test format clean test.interop fixtures.fetch test.hub test.standalone test.stress
 build:
 	opam exec -- dune build @all
@@ -8,14 +9,53 @@ format:
 clean:
 	opam exec -- dune clean
 test.interop: build
-	python3 scripts/generate_fixtures.py
-	python3 scripts/test_fetch_fixtures.py
-	python3 scripts/conformance.py synthetic
+	$(PYTHON) scripts/generate_fixtures.py
+	$(PYTHON) scripts/test_fetch_fixtures.py
+	$(PYTHON) scripts/conformance.py synthetic
 fixtures.fetch:
-	python3 scripts/fetch_fixtures.py
+	$(PYTHON) scripts/fetch_fixtures.py
 test.hub: build
-	python3 scripts/conformance.py hub
+	$(PYTHON) scripts/conformance.py hub
 test.standalone:
-	bash scripts/standalone.sh
+	opam exec -- bash scripts/standalone.sh
 test.stress: build
-	SAFETENSORS_CASES=10000 opam exec -- dune exec test/test_reader.exe
+	mkdir -p .cache/reports
+	bash -o pipefail -c 'SAFETENSORS_CASES=10000 opam exec -- dune exec test/test_reader.exe | tee .cache/reports/stress.txt'
+
+.PHONY: js.deps js.reference js.corpus js.build.jsoo js.build.melange test.jsoo test.melange test.javascript test.js.install
+js.deps:
+	cd javascript && npm ci
+	cd javascript && npx playwright install --with-deps chromium --only-shell
+js.reference:
+	python3 -m venv .venv
+	.venv/bin/python -m pip install --only-binary=:all: --require-hashes -r scripts/reference-requirements.txt
+js.corpus: build fixtures.fetch
+	.venv/bin/python scripts/javascript-corpus.py
+js.build.jsoo:
+	bash scripts/javascript-build.sh jsoo
+js.build.melange:
+	bash scripts/javascript-build.sh melange
+test.jsoo: js.build.jsoo
+	node javascript/verify.cjs jsoo
+test.melange: js.build.melange
+	node javascript/verify.cjs melange
+test.javascript: test.jsoo test.melange test.js.install
+test.js.install:
+	bash scripts/javascript-install.sh jsoo
+	bash scripts/javascript-install.sh melange
+
+.PHONY: test.javascript.run test.javascript.offline test.native.offline
+test.javascript.run:
+	node javascript/verify.cjs jsoo
+	node javascript/verify.cjs melange
+	$(MAKE) test.js.install
+test.javascript.offline:
+	bash scripts/offline.sh make test.javascript.run
+test.native.offline:
+	bash scripts/offline.sh make PYTHON=.venv/bin/python test.interop test.hub test.stress
+
+.PHONY: tree.check
+tree.check:
+	git status --short
+	git diff --exit-code
+	test -z "$$(git status --porcelain)"
