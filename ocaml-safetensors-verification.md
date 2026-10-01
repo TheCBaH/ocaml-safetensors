@@ -1,7 +1,9 @@
 # Safetensors verification research
 
 Inspected: 2026-09-29. Scope: standalone OCaml reader; no `mltorch` integration.
-This is source inspection and fixture discovery, not a completed reader test run.
+This records the original source inspection and fixture discovery. The implemented
+reader now has executed conformance evidence; see [compatibility](docs/compatibility.md)
+and the implementation tracker for current results.
 See the [implementation plan](ocaml-safetensors-plan.md),
 [tracker](ocaml-safetensors-tracker.md), and
 [fixture lock](ocaml-safetensors-fixtures.json).

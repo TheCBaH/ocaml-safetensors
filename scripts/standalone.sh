@@ -9,7 +9,8 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$work/source" "$work/client"
 git -C "$root" archive HEAD | tar -x -C "$work/source"
-opam switch create "$work/switch" ocaml-system --yes
+compiler=$(ocamlc -version)
+opam switch create "$work/switch" "ocaml-base-compiler.$compiler" --yes
 opam pin add --switch "$work/switch" safetensors.0.1.0 "$work/source" --no-action --yes
 opam install --switch "$work/switch" safetensors --with-test --yes
 cat > "$work/client/dune-project" <<'DUNE'
@@ -34,7 +35,7 @@ ML
 opam exec --switch "$work/switch" -- dune build --root "$work/client" core.exe
 run_offline() {
   if [[ "${SAFETENSORS_REQUIRE_NETNS:-0}" == 1 ]]; then
-    sudo -n unshare --net -- env -i PATH=/nonexistent "$@"
+    bash "$root/scripts/offline.sh" env -i PATH=/nonexistent "$@"
   else
     env -i PATH=/nonexistent "$@"
   fi

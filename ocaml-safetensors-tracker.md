@@ -1,9 +1,9 @@
 # OCaml Safetensors implementation tracker
 
-Updated: 2026-10-01. Repository recommendation: `TheCBaH/ocaml-safetensors`.
+Updated: 2026-10-01. Repository: `TheCBaH/ocaml-safetensors`.
 Current state: repository created; core and Unix readers implemented on `devel`.
-Local tests and independent corpus conformance pass. Full CI/install gates are
-in progress; `main` still contains only the empty root commit.
+Local tests, independent corpus conformance, and clean package installs pass.
+Final CI gates are in progress; `main` still contains only the empty root commit.
 
 **Scope guard:** `mltorch` integration and producer sidecar handling are outside
 this tracker. The release must be verified as a standalone library. A future
@@ -62,11 +62,11 @@ runtime verification.
 
 | Gate | Status | Required tasks |
 | --- | --- | --- |
-| M0 — Standalone skeleton and reference contract | Not started | ST-010–012 |
-| M1 — Exact, bounded Jsont header/index | Not started | ST-020–023 |
-| M2 — Memory and Unix bytes | Not started | ST-030–032 |
-| M3 — Independent conformance | Not started | ST-040–044 |
-| M4 — Standalone release readiness | Not started | ST-050–052 |
+| M0 — Standalone skeleton and reference contract | In progress | ST-010–012 |
+| M1 — Exact, bounded Jsont header/index | Done | ST-020–023 |
+| M2 — Memory and Unix bytes | Done | ST-030–032 |
+| M3 — Independent conformance | Done | ST-040–044 |
+| M4 — Standalone release readiness | In progress | ST-050–052 |
 
 Critical sequence: bootstrap → reference probes → Jsont proof → index validation
 → memory/Unix readers → differential conformance → release readiness.
@@ -77,13 +77,13 @@ dependencies are met. This does not require parallel agents.
 
 | ID | Decision / uncertainty | Resolution |
 | --- | --- | --- |
-| D-01 | Name | Recommend `TheCBaH/ocaml-safetensors`; recheck at ST-010, not reserved. |
+| D-01 | Name | Created `TheCBaH/ocaml-safetensors`; packages `safetensors` and `safetensors-unix`. |
 | D-02 | Consumer scope | Exclude all `mltorch` and producer-sidecar implementation and testing. |
-| D-03 | Reference | Pin 0.8.0 initially; resolve wheel hashes and execute probes in ST-012. |
+| D-03 | Reference | Pinned 0.8.0 wheels with hashes; 26 acceptance probes executed. |
 | D-04 | Whitespace | Accept JSON whitespace around the root object, matching the released reader. |
-| D-05 | Jsont exact integers and limits | Required proof in ST-020; no lossy fallback. |
-| D-06 | Duplicate/unknown-field differences | OCaml rejects; characterize upstream in ST-012 and retain explicit differences. |
-| D-07 | HF corpus | Six files under 5 MiB suite / 2 MiB each; raw headers verified, reader comparisons still pending. |
+| D-05 | Jsont exact integers and limits | Exact token extraction and bounded fixed-schema decoding implemented and tested. |
+| D-06 | Duplicate/unknown-field differences | OCaml rejects; executed differences are recorded in docs/compatibility.md. |
+| D-07 | HF corpus | Six files under 5 MiB suite / 2 MiB each; all 307 tensors compared byte-for-byte with the upstream reader. |
 | D-08 | Offline fixtures | Synthetic project-owned binaries in Git; HF payloads fetched separately, not redistributed in package. |
 | D-09 | Package independence | No Python/Rust/tensor framework at runtime; oracle remains test-only. |
 
@@ -119,3 +119,9 @@ Python requirements and six downloader failure/cache tests are included.
 The separately installable file library is named `safetensors-unix`, because
 Dune assigns `safetensors.unix` to the core package by its name prefix.
 This is an intentional correction to the initial naming proposal.
+
+Clean source-package installation also passed locally: a fresh OCaml 4.14.3
+switch installed each package separately and compiled external core and Unix
+clients. Both clients ran with an empty environment and no runtime tools on
+PATH. The 10,000-case stress run passed (seed 1337). CI additionally requires
+network namespaces for external clients and differential verification.

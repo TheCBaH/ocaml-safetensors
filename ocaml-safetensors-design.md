@@ -65,7 +65,7 @@ Use one source repository with independently installable packages:
 | Package / public library | Responsibility | Runtime dependencies |
 | --- | --- | --- |
 | `safetensors` / `safetensors` | Header decoding, validation, immutable index, in-memory bytes | OCaml stdlib, Jsont, bytesrw (`jsont.bytesrw`) |
-| `safetensors-unix` / `safetensors.unix` | Open a regular file, read header, seek and copy selected payloads | `safetensors`, Unix |
+| `safetensors-unix` / `safetensors-unix` | Open a regular file, read header, seek and copy selected payloads | `safetensors`, Unix |
 
 Start with OCaml 4.14 compatibility because the consumer uses that generation.
 Select the minimum Dune and Jsont versions by compiling the parser prototype,
@@ -153,7 +153,7 @@ dtype. F16/BF16 are exposed as their stored bits. Structural validation does not
 scan numerical values, reject NaN/Inf, or normalize boolean bytes.
 
 Default policy limits: 100,000,000 header bytes, 100,000 tensors, rank 64,
-4,096 decoded bytes per tensor name, and JSON nesting depth 16. Make limits
+4,096 decoded bytes per JSON member name, and JSON nesting depth 16. Make limits
 configurable with hard host-allocation checks that cannot be disabled. These
 are resource policies, not format restrictions. Enforce count/rank/depth limits
 during parsing, before constructing unbounded intermediate lists. Document
@@ -346,7 +346,7 @@ is part of verification.
 
 Use the existing `opickle` and `ocaml-devcontainer` projects as concrete
 scaffolding references. When implementation starts, follow
-[repo bootstrap](.ai/repo-bootstrap.md): create an empty `root` commit on `main`,
+the empty-root bootstrap convention: create an empty `root` commit on `main`,
 then develop on `devel`. Transfer reusable scaffolding commits with
 `git cherry-pick -x` and retain local adaptations; do not copy a whole unrelated
 project. Use generated opam metadata, a pinned formatter, shared
@@ -379,7 +379,7 @@ Promote clean logical commits from `devel` to `main` only after CI is green;
 create no PR unless requested. Confirm release licensing/metadata, test the
 source tarball with opam, and publish a tagged release only after standalone
 installation, synthetic tests, and full locked-corpus conformance pass. Record landed and pending state in
-[the project registry](.ai/projects.md).
+[the implementation tracker](ocaml-safetensors-tracker.md).
 
 ## Delivery milestones and decisions
 

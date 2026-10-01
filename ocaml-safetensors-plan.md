@@ -13,7 +13,7 @@ format and fits the existing `ocaml-*` repositories. A coined name would make
 format discovery harder without providing a useful distinction.
 
 Use `safetensors` / `Safetensors` for the core package/library/module and
-`safetensors-unix` / `safetensors.unix` / `Safetensors_unix` for file access.
+`safetensors-unix` / `safetensors-unix` / `Safetensors_unix` for file access.
 On 2026-09-29, authenticated GitHub lookup returned 404 for the proposed repo,
 repository searches for `ocaml-safetensors` and `safetensors-ocaml` returned no
 results, and the public opam registry had no `packages/safetensors` directory.
@@ -65,7 +65,7 @@ as a single safetensors file does not add shard-index support.
 Tasks: `ST-010`–`ST-012`.
 
 1. Recheck names; create the standalone repository with an empty `root` commit
-   on `main`, then work on `devel`, following [bootstrap](.ai/repo-bootstrap.md).
+   on `main`, then work on `devel`, following the empty-root bootstrap convention.
    Import suitable scaffolding history using `git cherry-pick -x`; adapt it to
    this package instead of carrying another project's dependencies.
 2. Establish Dune-generated opam metadata, license/authorship, `.mli` boundaries,
