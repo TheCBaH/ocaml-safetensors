@@ -56,7 +56,7 @@ jobs:
         run: ${{ steps.container.outputs.exec }} env SAFETENSORS_REQUIRE_NETNS=1 make test.standalone
       - name: Store native evidence
         if: always() && matrix.ocaml == '4.14.3'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: standalone-native
           path: .cache/reports/
@@ -80,7 +80,7 @@ jobs:
         run: ${{ steps.container.outputs.exec }} make test.javascript.offline
       - name: Store JavaScript evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: standalone-javascript
           path: .cache/reports/
