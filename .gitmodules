@@ -1,0 +1,3 @@
+[submodule "vendor/melange-bigarray"]
+	path = vendor/melange-bigarray
+	url = https://github.com/TheCBaH/melange-bigarray.git

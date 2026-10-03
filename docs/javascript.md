@@ -9,11 +9,12 @@ mltorch integration is outside this project.
 ## Build and use
 
 Open `.devcontainer/javascript/devcontainer.json` for the pinned toolchain:
-OCaml 4.14.3, dune 3.24.2, Jsont 0.2.0, bytesrw 0.3.0,
+OCaml 4.14.4, dune 3.24.2, Jsont 0.2.0, bytesrw 0.3.0,
 js_of_ocaml 6.4.1, Melange 7.0.1-414 and Node 24.19.0. JavaScript development
 dependencies and Chromium are locked through `javascript/package-lock.json`.
 
 ```sh
+make js.submodules
 make js.deps js.reference
 make js.build.jsoo js.build.melange js.corpus
 make test.javascript.offline
@@ -22,7 +23,10 @@ make test.javascript.offline
 The build targets assemble independent dune projects below
 `.cache/javascript/{jsoo,melange}`. `make test.js.install` installs each package
 to an isolated prefix and builds an external dune client against installed
-artifacts. These packages are buildable locally; no public opam or npm release
+artifacts. The Melange target first installs the separately maintained
+`melange-bigarray` dependency to `.cache/javascript/bigarray/installed`; include
+that prefix's `lib` directory in `OCAMLPATH` when using another install prefix.
+These packages are buildable locally; no public opam or npm release
 has been made. To install explicitly:
 
 ```sh
@@ -76,22 +80,38 @@ are applied by an explicit patch with zero fuzz:
   of calling `Obj.Extension_constructor`, which Melange does not implement.
   The original extensible-variant equality witness stays intact.
 
-A scoped `Bigarray.Array1` polyfill supplies the APIs used by Jsont and bytesrw.
-It uses JavaScript typed arrays for float32/64, signed/unsigned 8/16-bit values,
-int32, int64, int, nativeint and char. Int64 storage uses two 32-bit words and
-OCaml int64 operations, preserving all 64 bits without Number conversion.
-C and Fortran indexing, bounds checks, typed narrowing, `create`, `init`,
-`dim`, `kind`, `layout`, `get`, `set` and unsafe access are implemented.
-Melange int/nativeint storage is 32-bit. Complex kinds, multidimensional
-Bigarrays, mapping, slicing and the rest of the native Bigarray API are not
-provided. This is a dependency compatibility layer, not a general Bigarray
-replacement; its public sublibrary name is `safetensors-melange.bigarray`.
+The Melange build uses the independently installed
+[melange-bigarray](https://github.com/TheCBaH/melange-bigarray) package at
+`596676e56e45d14aefe3746df5a8931a58387442`. The Git submodule at `vendor/melange-bigarray` is pinned by the repository's
+Git entry; `.gitmodules` records the upstream URL. Clone with
+`git clone --recurse-submodules`, or run `make js.submodules` in an existing
+checkout. The JavaScript devcontainer initializes it through the named
+`submodules` post-create command and waits for completion before attaching.
+Its CI checkout is recursive. `make js.bigarray` verifies the checked-out commit and
+clean submodule, builds in its Git-ignored `_build` directory, and installs
+both `melange-bigarray` and its opt-in `melange-bigarray.compat` provider.
+The Bigarray preparation target does not download or extract a release archive.
+Native Dune builds exclude `vendor`; native package installs do not require
+initializing this optional dependency. Required upstream license notices remain installed
+with that dependency.
 
-Tests exercise Array1 directly and through Jsont bigarray decoding and bytesrw
-slice conversion. The port is confined to the optional build. Revisit the
-patch and polyfill when updating locked sources or the compiler. Melange 5.1
-also failed recursive Jsont initialization; the verified build requires the
-pinned Melange 7 compiler.
+Jsont and bytesrw link `melange-bigarray.compat` consistently, so their plain
+`Bigarray` types are identical to `Melange_bigarray` types. The existing public
+`safetensors-melange.bigarray` library name forwards to this provider for older
+Dune clients. New clients may link `melange-bigarray.compat` directly or use
+`module Bigarray = Melange_bigarray`. The provider supplies the complete
+in-memory Array0–3/Genarray API, complex kinds and shared views. Int/nativeint
+storage is 32-bit; generic comparison/hash, Marshal, mmap and native ABI limits
+follow the [polyfill's contract](https://github.com/TheCBaH/melange-bigarray/blob/main/docs/interop-and-ops.md).
+Safetensors' public copy adapter retains its existing ownership contract.
+
+Tests exercise typed narrowing, exact Int64 storage, overlap-safe blits,
+complex multidimensional views and shared reshapes. Jsont bigarray decoding and
+bytesrw slices use the installed provider; external clients additionally pass
+arrays between those dependencies and the explicit `Melange_bigarray` module.
+The port is confined to the optional build. Revisit the explicit Jsont patch
+and submodule pin when updating sources or the compiler. Melange 5.1 failed
+recursive Jsont initialization; the verified build requires Melange 7.
 
 ## Verification
 

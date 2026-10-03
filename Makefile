@@ -8,6 +8,7 @@ format:
 	opam exec -- dune fmt
 clean:
 	opam exec -- dune clean
+	$(PYTHON) -c 'import pathlib, shutil; p = pathlib.Path("vendor/melange-bigarray/_build"); shutil.rmtree(p) if p.exists() else None'
 test.interop: build
 	$(PYTHON) scripts/generate_fixtures.py
 	$(PYTHON) scripts/test_fetch_fixtures.py
@@ -22,7 +23,7 @@ test.stress: build
 	mkdir -p .cache/reports
 	bash -o pipefail -c 'SAFETENSORS_CASES=10000 opam exec -- dune exec test/test_reader.exe | tee .cache/reports/stress.txt'
 
-.PHONY: js.deps js.reference js.corpus js.build.jsoo js.build.melange test.jsoo test.melange test.javascript test.js.install
+.PHONY: js.deps js.reference js.corpus js.submodules js.bigarray js.build.jsoo js.build.melange test.jsoo test.melange test.javascript test.js.install
 js.deps:
 	cd javascript && npm ci
 	cd javascript && npx playwright install --with-deps chromium --only-shell
@@ -33,7 +34,11 @@ js.corpus: build fixtures.fetch
 	.venv/bin/python scripts/javascript-corpus.py
 js.build.jsoo:
 	bash scripts/javascript-build.sh jsoo
-js.build.melange:
+js.submodules:
+	git submodule update --init --recursive --depth 1 -- vendor/melange-bigarray
+js.bigarray: js.submodules
+	bash scripts/melange-bigarray.sh
+js.build.melange: js.bigarray
 	bash scripts/javascript-build.sh melange
 test.jsoo: js.build.jsoo
 	node javascript/verify.cjs jsoo

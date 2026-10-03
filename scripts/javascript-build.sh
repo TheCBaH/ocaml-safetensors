@@ -5,6 +5,14 @@ backend=${1:?usage: javascript-build.sh jsoo|melange}
 case "$backend" in jsoo|melange) ;; *) exit 2;; esac
 root=$PWD
 work=$root/.cache/javascript/$backend
+python3 - "$work" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+work = Path(sys.argv[1])
+if work.exists():
+    shutil.rmtree(work)
+PY
 mkdir -p "$work/adapter"
 cp javascript/shared/{reader.ml,reader.mli,byte_buffer.mli} "$work/adapter/"
 cp "javascript/$backend/byte_buffer.ml" "$work/adapter/"
@@ -40,6 +48,7 @@ EOF
  (libraries safetensors safetensors-jsoo jsont.bytesrw bytesrw))
 EOF
 else
+  export OCAMLPATH="$root/.cache/javascript/bigarray/installed/lib${OCAMLPATH:+:$OCAMLPATH}"
   download() {
     local name=$1 digest=$2
     local archive=$root/.cache/javascript/$name.tbz
@@ -55,16 +64,14 @@ else
   patch --batch --fuzz=0 -p1 -d "$work/jsont-0.2.0" < javascript/melange/jsont.patch
   mkdir -p "$work/core" "$work/polyfill"
   cp src/safetensors.{ml,mli} "$work/core/"
-  cp javascript/melange/bigarray.ml "$work/polyfill/"
   cat > "$work/dune-project" <<'EOF'
 (lang dune 3.17)
 (using melange 0.1)
 (package (name safetensors-melange))
 EOF
   cat > "$work/polyfill/dune" <<'EOF'
-(library (name bigarray_polyfill) (public_name safetensors-melange.bigarray)
- (wrapped false) (modules bigarray) (modes melange)
- (preprocess (pps melange.ppx)))
+(library (name bigarray_compat) (public_name safetensors-melange.bigarray)
+ (modules) (modes melange) (libraries melange-bigarray.compat))
 EOF
   cat > "$work/core/dune" <<'EOF'
 (library (name safetensors) (public_name safetensors-melange.core)
@@ -79,11 +86,11 @@ EOF
 (subdir bytesrw-0.3.0/src
  (library (name bytesrw) (public_name safetensors-melange.bytesrw)
   (modules bytesrw bytesrw_fmt) (modes melange)
-  (libraries safetensors-melange.bigarray) (flags (:standard -w -a))))
+  (libraries melange-bigarray.compat) (flags (:standard -w -a))))
 (subdir jsont-0.2.0/src
  (library (name jsont) (public_name safetensors-melange.jsont)
   (modules jsont jsont_base) (modes melange)
-  (libraries safetensors-melange.bigarray) (flags (:standard -w -a))))
+  (libraries melange-bigarray.compat) (flags (:standard -w -a))))
 (subdir jsont-0.2.0/src/bytesrw
  (library (name jsont_bytesrw) (public_name safetensors-melange.codec)
   (modules jsont_bytesrw) (modes melange)
@@ -92,7 +99,7 @@ EOF
 (melange.emit (target out)
  (modules main core_cases fixtures describe test_bigarray)
  (preprocess (pps melange.ppx))
- (libraries safetensors-melange safetensors-melange.core
+ (libraries melange-bigarray.compat safetensors-melange safetensors-melange.core
   safetensors-melange.codec safetensors-melange.bytesrw))
 (install (section doc) (package safetensors-melange)
  (files (jsont-0.2.0/LICENSE.md as jsont-LICENSE.md)
