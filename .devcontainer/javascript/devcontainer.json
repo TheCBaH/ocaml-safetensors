@@ -10,7 +10,7 @@
     },
     "ghcr.io/devcontainers/features/sshd:1": {},
     "ghcr.io/thecbah/ocaml-features/ocaml:1": {
-      "version": "4.14.3",
+      "version": "4.14.4",
       "packages": "bytesrw#0.3.0 dune#3.24.2 js_of_ocaml#6.4.1 js_of_ocaml-compiler#6.4.1 js_of_ocaml-ppx#6.4.1 jsont#0.2.0 melange#7.0.1-414 ocamlformat#0.29.0",
       "base-packages": ""
     },

@@ -49,8 +49,26 @@ let run () =
   in
   let copied = Bytesrw.Bytes.Slice.to_bigbytes slice in
   assert (Array1.get copied 0 = 128 && Array1.get copied 1 = 129);
+  let view = Array1.sub decoded 0 1 in
+  Array1.fill view 7.;
+  assert (Array1.get decoded 0 = 7.);
+  let matrix = reshape_2 (genarray_of_array1 decoded) 1 2 in
+  Array2.set matrix 0 1 9.;
+  assert (Array1.get decoded 1 = 9.);
+  let overlap = Array1.init Int64 c_layout 4 (fun i -> values.(i)) in
+  Array1.blit (Array1.sub overlap 0 3) (Array1.sub overlap 1 3);
+  assert (Array1.get overlap 1 = Int64.min_int);
+  assert (Array1.get overlap 2 = Int64.max_int);
+  assert (Array1.get overlap 3 = 9007199254740993L);
+  let complex =
+    Array2.init Complex64 fortran_layout 2 2 (fun i j ->
+        { Complex.re = float_of_int i; im = float_of_int j })
+  in
+  let row = Array2.slice_right complex 2 in
+  Array1.set row 1 { Complex.re = 3.; im = -4. };
+  assert ((Array2.get complex 1 2).Complex.im = -4.);
   print_endline
-    "Bigarray Array1: layouts, bounds, narrowing, int64 and dependency \
+    "Bigarray: layouts, shared views, overlap, complex, int64 and dependency \
      consumers"
 
 let nativeints from_int =

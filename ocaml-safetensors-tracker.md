@@ -1,6 +1,6 @@
 # OCaml Safetensors implementation tracker
 
-Updated: 2026-10-01. Repository: `TheCBaH/ocaml-safetensors`.
+Updated: 2026-10-03. Repository: `TheCBaH/ocaml-safetensors`.
 Current state: standalone implementation complete and promoted to `main`.
 All required CI jobs passed for implementation commit `212181e`; the final
 tracker-only update follows the same `devel` → CI → `main` workflow.
@@ -169,3 +169,17 @@ JS clients and pristine source trees. The Melange Bigarray polyfill is scoped
 to Array1; metadata integers and raw bytes retain the common reader semantics.
 All build and verification helpers use Makefile targets. mltorch integration,
 public opam/npm publication and release tags remain outside this delivery.
+
+
+### 2026-10-03 Standalone Melange Bigarray migration
+
+JS-007 uses `melange-bigarray` at locked revision `5ea1e7e`, installed in its
+own prefix, for Jsont and bytesrw's plain Bigarray API. The bundled Array1
+implementation is removed; `safetensors-melange.bigarray` forwards to the
+installed compatibility provider. JavaScript OCaml advances to 4.14.4;
+native dependency bounds and matrices remain unchanged. Shared views,
+reshape, complex arrays, exact overlapping Int64 copies and explicit/provider
+module type identity are exercised alongside the reader's existing corpus.
+Local devcontainer Node/Chromium tests, offline installed clients and native
+regression/format checks pass. Main promotion is gated on the same three
+required CI jobs. [Maintained verification details](docs/javascript.md#standalone-bigarray-migration-2026-10-03).
