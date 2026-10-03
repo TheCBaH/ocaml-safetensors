@@ -1,5 +1,8 @@
 # OCaml Safetensors
 
+[![build](https://github.com/TheCBaH/ocaml-safetensors/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/TheCBaH/ocaml-safetensors/actions/workflows/build.yml)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/TheCBaH/ocaml-safetensors)
+
 A standalone, read-only OCaml library for safetensors. Jsont parses the JSON
 header; the reader validates every tensor descriptor and exposes raw
 little-endian bytes. No tensor framework, Python, or Rust is needed at runtime.
