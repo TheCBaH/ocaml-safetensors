@@ -194,3 +194,8 @@ Local devcontainer dependency rebuild and installed client pass offline, with
 clean submodule and matching provider types. Native build/tests/formatting
 pass. Main promotion requires all three clean CI jobs. The archive lock is
 removed; provenance reports now identify Git transport, pin, path and state.
+
+The JavaScript devcontainer follows the shared project pattern: a named
+`submodules` post-create command invokes Git directly, and `waitFor` waits for
+`postCreateCommand` before attaching. Make retains preparation for builds
+outside a devcontainer.

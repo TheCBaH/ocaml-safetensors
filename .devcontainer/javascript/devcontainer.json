@@ -19,7 +19,10 @@
     }
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "make js.submodules",
+  "postCreateCommand": {
+    "submodules": "git submodule update --recursive --init --depth=1"
+  },
+  "waitFor": "postCreateCommand",
   "customizations": {
     "vscode": {
       "extensions": [

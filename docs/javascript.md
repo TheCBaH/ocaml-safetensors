@@ -85,8 +85,9 @@ The Melange build uses the independently installed
 `5ea1e7e2de4b55fa9be92da3765232f151be4720`. The Git submodule at `vendor/melange-bigarray` is pinned by the repository's
 Git entry; `.gitmodules` records the upstream URL. Clone with
 `git clone --recurse-submodules`, or run `make js.submodules` in an existing
-checkout. The JavaScript devcontainer initializes it on creation and its CI
-checkout is recursive. `make js.bigarray` verifies the checked-out commit and
+checkout. The JavaScript devcontainer initializes it through the named
+`submodules` post-create command and waits for completion before attaching.
+Its CI checkout is recursive. `make js.bigarray` verifies the checked-out commit and
 clean submodule, builds in its Git-ignored `_build` directory, and installs
 both `melange-bigarray` and its opt-in `melange-bigarray.compat` provider.
 The Bigarray preparation target does not download or extract a release archive.
