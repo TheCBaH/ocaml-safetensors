@@ -275,3 +275,43 @@ let () =
   Printf.printf
     "properties: seed=%d cases=%d, byte parity and malformed-input mutations\n"
     seed cases
+
+let () =
+  let data =
+    file
+      {|{"a":{"dtype":"U8","shape":[3],"data_offsets":[0,3]},"b":{"dtype":"U8","shape":[2],"data_offsets":[3,5]}}|}
+      "abcde"
+  in
+  with_temp data (fun path ->
+      let mapped = get (Safetensors_unix.Mmap.open_file path) in
+      let copied = get (Safetensors.Memory.of_string data) in
+      List.iter
+        (fun name ->
+          let view = get (Safetensors.Memory.tensor_view mapped name) in
+          let bytes = get (Safetensors.Memory.copy_tensor copied name) in
+          assert (Bigarray.Array1.dim view = Bytes.length bytes);
+          Bytes.iteri (fun i c -> assert (Bigarray.Array1.get view i = c)) bytes;
+          (* a [Bigstring] payload views, not copies: a write through the
+             parent bigstring would be visible; here the check is that the
+             view is a sub-array of the mapping *)
+          let again = get (Safetensors.Memory.tensor_view mapped name) in
+          assert (Bigarray.Array1.dim again = Bigarray.Array1.dim view))
+        [ "a"; "b" ];
+      expect Safetensors.Error.Missing_tensor
+        (Safetensors.Memory.tensor_view mapped "nope"));
+  with_temp "short" (fun path ->
+      expect Safetensors.Error.Truncated (Safetensors_unix.Mmap.open_file path));
+  (* a bigstring payload is viewed without copying *)
+  let backing =
+    Bigarray.Array1.init Bigarray.Char Bigarray.c_layout (String.length data)
+      (String.get data)
+  in
+  let m = get (Safetensors.Memory.of_bigstring backing) in
+  let view = get (Safetensors.Memory.tensor_view m "b") in
+  let start = String.length data - 2 in
+  Bigarray.Array1.set backing start 'Z';
+  assert (Bigarray.Array1.get view 0 = 'Z');
+  (* a string payload yields an independent copy *)
+  let copied = get (Safetensors.Memory.of_string data) in
+  let v = get (Safetensors.Memory.tensor_view copied "b") in
+  assert (Bigarray.Array1.get v 0 = 'd')

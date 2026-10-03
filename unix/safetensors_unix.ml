@@ -114,3 +114,26 @@ let with_file ?limits path f =
   match open_file ?limits path with
   | Error e -> Error e
   | Ok t -> Fun.protect ~finally:(fun () -> close t) (fun () -> f t)
+
+module Mmap = struct
+  let open_file ?limits path =
+    match open_file ?limits path with
+    | Error e -> Error e
+    | Ok t ->
+        Fun.protect
+          ~finally:(fun () -> close t)
+          (fun () ->
+            io (fun () ->
+                let size = (Unix.LargeFile.fstat t.fd).Unix.LargeFile.st_size in
+                if size > Int64.of_int max_int then
+                  Error
+                    (Error.make Error.Resource_limit
+                       "file is too large to map on this platform")
+                else
+                  let mapped =
+                    Bigarray.array1_of_genarray
+                      (Unix.map_file t.fd Bigarray.Char Bigarray.c_layout false
+                         [| Int64.to_int size |])
+                  in
+                  Memory.of_bigstring ?limits mapped))
+end

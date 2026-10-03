@@ -27,3 +27,14 @@ val with_file :
   ('a, Safetensors.Error.t) result
 (** Closes the descriptor even if the callback raises. Callback exceptions are
     propagated; expected file and format errors are returned as results. *)
+
+module Mmap : sig
+  val open_file :
+    ?limits:Safetensors.Limits.t ->
+    string ->
+    (Safetensors.Memory.t, Safetensors.Error.t) result
+  (** Map the whole file read-only; {!Safetensors.Memory.tensor_view} then
+      returns zero-copy views into the mapping. The file is closed on return and
+      the mapping lives as long as a view or the result does. The file must not
+      change while it is mapped. *)
+end

@@ -443,34 +443,84 @@ module Index = struct
         { metadata; tensors; data_start })
 end
 
+module Bigstring = struct
+  type t =
+    (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+end
+
 module Memory = struct
-  type t = { data : string; index : Index.t }
+  type payload = String of string | Bigstring of Bigstring.t
+  type t = { payload : payload; index : Index.t }
 
   let index t = t.index
 
-  let of_string ?limits data =
-    if String.length data < 8 then
+  let length = function
+    | String s -> String.length s
+    | Bigstring b -> Bigarray.Array1.dim b
+
+  let sub_string payload pos len =
+    match payload with
+    | String s -> String.sub s pos len
+    | Bigstring b -> String.init len (fun i -> Bigarray.Array1.get b (pos + i))
+
+  let of_payload ?limits payload =
+    let size = length payload in
+    if size < 8 then
       Error (Error.make Error.Truncated "expected an eight-byte prefix")
     else
-      let file_size = Int64.of_int (String.length data) in
-      match Index.header_length ?limits ~file_size (String.sub data 0 8) with
+      let file_size = Int64.of_int size in
+      match Index.header_length ?limits ~file_size (sub_string payload 0 8) with
       | Error e -> Error e
       | Ok n -> (
           match
-            Index.decode_header ?limits ~file_size (String.sub data 8 n)
+            Index.decode_header ?limits ~file_size (sub_string payload 8 n)
           with
           | Error e -> Error e
-          | Ok index -> Ok { data; index })
+          | Ok index -> Ok { payload; index })
 
-  let copy_tensor t name =
+  let of_string ?limits data = of_payload ?limits (String data)
+  let of_bigstring ?limits data = of_payload ?limits (Bigstring data)
+
+  (* [Index.decode_header] validated every descriptor against the payload
+     length, so these offsets are within [length payload]; the explicit check
+     keeps the [int64] -> [int] narrowing independent of that argument. *)
+  let tensor_range t name =
     match Index.find t.index name with
     | None ->
         Error (Error.make ~tensor:name Error.Missing_tensor "tensor not found")
     | Some tensor ->
         let b, _ = Tensor.data_offsets tensor in
-        let start = Int64.to_int (Int64.add (Index.data_start t.index) b) in
-        let length = Int64.to_int (Tensor.byte_length tensor) in
-        let bytes = Bytes.create length in
-        Bytes.blit_string t.data start bytes 0 length;
-        Ok bytes
+        let start = Int64.add (Index.data_start t.index) b in
+        let len = Tensor.byte_length tensor in
+        let limit = Int64.of_int (length t.payload) in
+        if
+          start < 0L || len < 0L || start > limit || len > Int64.sub limit start
+        then
+          Error
+            (Error.make ~tensor:name Error.Invalid_offsets
+               "tensor range is outside the payload")
+        else Ok (Int64.to_int start, Int64.to_int len)
+
+  let copy_tensor t name =
+    match tensor_range t name with
+    | Error e -> Error e
+    | Ok (start, len) -> (
+        match t.payload with
+        | String s ->
+            let bytes = Bytes.create len in
+            Bytes.blit_string s start bytes 0 len;
+            Ok bytes
+        | Bigstring b ->
+            Ok (Bytes.init len (fun i -> Bigarray.Array1.get b (start + i))))
+
+  let tensor_view t name =
+    match tensor_range t name with
+    | Error e -> Error e
+    | Ok (start, len) -> (
+        match t.payload with
+        | Bigstring b -> Ok (Bigarray.Array1.sub b start len)
+        | String s ->
+            Ok
+              (Bigarray.Array1.init Bigarray.Char Bigarray.c_layout len
+                 (fun i -> String.unsafe_get s (start + i))))
 end

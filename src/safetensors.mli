@@ -102,6 +102,13 @@ module Index : sig
   val data_start : t -> int64
 end
 
+module Bigstring : sig
+  type t =
+    (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+  (** The payload kind shared by [Unix.map_file], js_of_ocaml's
+      [Typed_array.Bigstring] and the Melange bigarray shim. *)
+end
+
 module Memory : sig
   type t
 
@@ -109,6 +116,14 @@ module Memory : sig
   (** Retains the immutable input. All descriptors are validated before success.
   *)
 
+  val of_bigstring : ?limits:Limits.t -> Bigstring.t -> (t, Error.t) result
+  (** Like {!of_string} over a bigstring, which is retained, not copied. The
+      caller must not mutate it while the result or any view is in use. *)
+
   val index : t -> Index.t
   val copy_tensor : t -> string -> (bytes, Error.t) result
+
+  val tensor_view : t -> string -> (Bigstring.t, Error.t) result
+  (** The tensor's bytes. A view into the payload, with no copy, when [t] was
+      built by {!of_bigstring}; a fresh copy when built by {!of_string}. *)
 end

@@ -29,7 +29,38 @@ let reject ?limits label kind bytes =
 
 let accepted h data = get (Memory.of_string (file h data))
 
+let bigstring_of_string s =
+  Bigarray.Array1.init Bigarray.Char Bigarray.c_layout (String.length s)
+    (String.get s)
+
+let bigstring_parity () =
+  let h =
+    {|{"a":{"dtype":"U8","shape":[3],"data_offsets":[0,3]},"b":{"dtype":"U8","shape":[2],"data_offsets":[3,5]}}|}
+  in
+  let data = file h "abcde" in
+  let from_string = get (Memory.of_string data) in
+  let from_bigstring = get (Memory.of_bigstring (bigstring_of_string data)) in
+  List.iter
+    (fun name ->
+      let bytes = get (Memory.copy_tensor from_string name) in
+      let view = get (Memory.tensor_view from_bigstring name) in
+      assert (Bigarray.Array1.dim view = Bytes.length bytes);
+      Bytes.iteri (fun i c -> assert (Bigarray.Array1.get view i = c)) bytes;
+      assert (get (Memory.copy_tensor from_bigstring name) = bytes))
+    [ "a"; "b" ];
+  (match Memory.tensor_view from_bigstring "missing" with
+  | Error e -> assert (Error.kind e = Error.Missing_tensor)
+  | Ok _ -> failwith "missing tensor accepted");
+  match Memory.of_bigstring (bigstring_of_string (String.sub data 0 12)) with
+  | Error e ->
+      assert (
+        Error.kind e = Error.Invalid_offsets
+        || Error.kind e = Error.Truncated
+        || Error.kind e = Error.Invalid_header)
+  | Ok _ -> failwith "truncated bigstring accepted"
+
 let run () =
+  bigstring_parity ();
   let dtype_sizes =
     [
       ("BOOL", 1);
