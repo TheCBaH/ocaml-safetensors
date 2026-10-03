@@ -19,6 +19,7 @@
     }
   },
   "remoteUser": "vscode",
+  "postCreateCommand": "make js.submodules",
   "customizations": {
     "vscode": {
       "extensions": [

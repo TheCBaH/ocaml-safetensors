@@ -79,7 +79,10 @@ runtime = client / '_build/default/output/node_modules/melange-bigarray/melange_
 assert runtime.is_file(), 'external client did not emit the installed polyfill'
 assert 'melange-bigarray.compat' in (prefix / 'lib/safetensors-melange/META').read_text()
 assert (provider / 'lib/melange-bigarray/META').is_file()
-lock = json.loads((root / 'javascript/melange/bigarray.lock.json').read_text())
+prepared = json.loads((root / '.cache/reports/melange-bigarray.json').read_text())
+lock = {key: prepared[key] for key in ['repository', 'path', 'commit', 'transport', 'dirty']}
+pin = subprocess.check_output(['git', '-C', str(root), 'ls-files', '--stage', '--', lock['path']], text=True).split()[1]
+assert lock['commit'] == pin == subprocess.check_output(['git', '-C', str(root / lock['path']), 'rev-parse', 'HEAD'], text=True).strip()
 report = dict(source=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               dirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True)),
               dependency=lock, installed_prefix=str(prefix), provider_prefix=str(provider),

@@ -183,3 +183,14 @@ module type identity are exercised alongside the reader's existing corpus.
 Local devcontainer Node/Chromium tests, offline installed clients and native
 regression/format checks pass. Main promotion is gated on the same three
 required CI jobs. [Maintained verification details](docs/javascript.md#standalone-bigarray-migration-2026-10-03).
+
+
+### 2026-10-03 Bigarray Git submodule
+
+JS-008 replaces the Bigarray archive with `vendor/melange-bigarray` at the same
+verified `5ea1e7e`. Git records the upstream URL and exact commit. JavaScript
+Make/devcontainer/CI initialization is recursive; native Dune excludes vendor.
+Local devcontainer dependency rebuild and installed client pass offline, with
+clean submodule and matching provider types. Native build/tests/formatting
+pass. Main promotion requires all three clean CI jobs. The archive lock is
+removed; provenance reports now identify Git transport, pin, path and state.

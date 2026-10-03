@@ -14,6 +14,7 @@ js_of_ocaml 6.4.1, Melange 7.0.1-414 and Node 24.19.0. JavaScript development
 dependencies and Chromium are locked through `javascript/package-lock.json`.
 
 ```sh
+make js.submodules
 make js.deps js.reference
 make js.build.jsoo js.build.melange js.corpus
 make test.javascript.offline
@@ -81,11 +82,16 @@ are applied by an explicit patch with zero fuzz:
 
 The Melange build uses the independently installed
 [melange-bigarray](https://github.com/TheCBaH/melange-bigarray) package at
-`5ea1e7e2de4b55fa9be92da3765232f151be4720`. The source URL and SHA-256 are
-locked in `javascript/melange/bigarray.lock.json`; `make js.bigarray` verifies
-the archive, builds it and installs both `melange-bigarray` and its opt-in
-`melange-bigarray.compat` provider. No sibling checkout or bundled Bigarray
-implementation is used. Required upstream license notices remain installed
+`5ea1e7e2de4b55fa9be92da3765232f151be4720`. The Git submodule at `vendor/melange-bigarray` is pinned by the repository's
+Git entry; `.gitmodules` records the upstream URL. Clone with
+`git clone --recurse-submodules`, or run `make js.submodules` in an existing
+checkout. The JavaScript devcontainer initializes it on creation and its CI
+checkout is recursive. `make js.bigarray` verifies the checked-out commit and
+clean submodule, builds in its Git-ignored `_build` directory, and installs
+both `melange-bigarray` and its opt-in `melange-bigarray.compat` provider.
+The Bigarray preparation target does not download or extract a release archive.
+Native Dune builds exclude `vendor`; native package installs do not require
+initializing this optional dependency. Required upstream license notices remain installed
 with that dependency.
 
 Jsont and bytesrw link `melange-bigarray.compat` consistently, so their plain
@@ -103,7 +109,7 @@ complex multidimensional views and shared reshapes. Jsont bigarray decoding and
 bytesrw slices use the installed provider; external clients additionally pass
 arrays between those dependencies and the explicit `Melange_bigarray` module.
 The port is confined to the optional build. Revisit the explicit Jsont patch
-and dependency lock when updating sources or the compiler. Melange 5.1 failed
+and submodule pin when updating sources or the compiler. Melange 5.1 failed
 recursive Jsont initialization; the verified build requires Melange 7.
 
 ## Verification
@@ -146,6 +152,7 @@ parity or browser-engine coverage beyond tested Chromium is claimed.
 | JS-005 | Done | Optional Melange package and independent installed client |
 | JS-006 | Done | Devcontainer workflows, offline conformance, native regressions and version/size/RSS reports |
 | JS-007 | Done | Pinned installed melange-bigarray replaces bundled Array1; local Node/Chromium and offline installed clients passed; required CI gates main promotion |
+| JS-008 | Done | Git submodule replaces Bigarray archive transport; recursive preparation, offline rebuild/install client and native checks passed locally; required CI gates main promotion |
 
 
 ## Completed CI evidence
@@ -185,9 +192,21 @@ the clean commit to pass all three
 [required devcontainer jobs](https://github.com/TheCBaH/ocaml-safetensors/actions/workflows/build.yml).
 
 Artifact `standalone-javascript` includes `melange-bigarray.json` with the
-locked source/compiler/provider prefix and `melange-install.json` with the
+pinned submodule commit/path, clean state, compiler/provider prefix and `melange-install.json` with the
 reader source SHA/cleanliness, installed dependency, emitted runtime module
 and successful legacy-library/type-sharing checks. Existing backend reports
 retain corpus counts, limits, browser versions, bundle sizes and peak RSS.
 Native packages retain their compiler/dependency matrix and installation
 contract; their opam dependencies do not gain a Melange requirement.
+
+
+## Bigarray Git submodule (2026-10-03)
+
+JS-008 replaces the Bigarray archive download/lock with the submodule pin at
+`vendor/melange-bigarray`; the source stays at `5ea1e7e`. Local devcontainer
+checks passed an offline dependency rebuild and installed Melange client,
+including shared provider types, Jsont reshaping and bytesrw slices. Native
+build/tests/formatting also passed with the initialized dependency excluded
+from the native Dune tree. The submodule remained clean. `make clean` removes
+its ignored build output. These development checks are separate from the
+clean three-job CI gate required before main promotion.
