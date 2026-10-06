@@ -16,9 +16,9 @@
       "integrity": "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
     },
     "ghcr.io/thecbah/ocaml-features/ocaml:1": {
-      "version": "1.0.0",
-      "resolved": "ghcr.io/thecbah/ocaml-features/ocaml@sha256:81f1fe3cfb909acc948a5a5e67ecd6a42600dd1e77966292e34901a5651f95f9",
-      "integrity": "sha256:81f1fe3cfb909acc948a5a5e67ecd6a42600dd1e77966292e34901a5651f95f9"
+      "version": "1.0.1",
+      "resolved": "ghcr.io/thecbah/ocaml-features/ocaml@sha256:6144779f93131031b65c5ff0d55fb5bc46d59c13b30225660e9662839711317d",
+      "integrity": "sha256:6144779f93131031b65c5ff0d55fb5bc46d59c13b30225660e9662839711317d"
     }
   }
 }
