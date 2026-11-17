@@ -8,6 +8,7 @@ import struct
 import numpy as np
 import safetensors
 from safetensors.numpy import save
+from reference_versions import assert_reference_versions
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,8 +20,7 @@ def raw(header, payload=b''):
 
 
 def generate():
-    assert safetensors.__version__ == '0.8.0'
-    assert np.__version__ == '2.2.6'
+    assert_reference_versions()
     arrays = {}
     for dtype in ('bool', 'uint8', 'int8', 'uint16', 'int16', 'uint32', 'int32',
                   'uint64', 'int64', 'float16', 'float32', 'float64'):
@@ -49,8 +49,7 @@ def main():
     args = parser.parse_args()
     directory = ROOT / 'test' / 'fixtures'
     fixtures = generate()
-    manifest = {'generator': 'scripts/generate_fixtures.py', 'safetensors': safetensors.__version__,
-                'numpy': np.__version__, 'license': 'MIT', 'files': {}}
+    manifest = {'generator': 'scripts/generate_fixtures.py', 'license': 'MIT', 'files': {}}
     for name, data in sorted(fixtures.items()):
         manifest['files'][name] = {'size_bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
         if args.write:
@@ -63,6 +62,11 @@ def main():
         (directory / 'manifest.json').write_text(encoded)
     else:
         assert (directory / 'manifest.json').read_text() == encoded, 'manifest drift'
+    reports = ROOT / '.cache' / 'reports'
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / 'fixtures.json').write_text(json.dumps({
+        'tool_versions': assert_reference_versions(), 'manifest': manifest,
+    }, indent=2, sort_keys=True) + '\n')
     print('synthetic fixtures:', len(fixtures), 'files,', sum(map(len, fixtures.values())), 'bytes')
 
 

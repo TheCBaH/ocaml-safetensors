@@ -22,7 +22,5 @@
     }
   },
   "generator": "scripts/generate_fixtures.py",
-  "license": "MIT",
-  "numpy": "2.2.6",
-  "safetensors": "0.8.0"
+  "license": "MIT"
 }
