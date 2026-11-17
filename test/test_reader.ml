@@ -104,33 +104,7 @@ let () =
   expect Error.Invalid_argument (Safetensors_unix.open_file ".");
   expect Error.Io
     (Safetensors_unix.open_file "/missing-safetensors-test-dir/file");
-  with_temp "" (fun p ->
-      let size = 8_589_934_592L in
-      let h =
-        Printf.sprintf
-          {|{"big":{"dtype":"U8","shape":[%Ld],"data_offsets":[0,%Ld]}}|} size
-          size
-      in
-      let prefix = file h "" in
-      let out = open_out_bin p in
-      output_string out prefix;
-      close_out out;
-      let fd = Unix.openfile p [ Unix.O_WRONLY ] 0 in
-      Unix.LargeFile.ftruncate fd
-        (Int64.add size (Int64.of_int (String.length prefix)));
-      Unix.close fd;
-      let before = Gc.allocated_bytes () in
-      get
-        (Safetensors_unix.with_file p (fun r ->
-             let b = Bytes.create 3 in
-             get
-               (Safetensors_unix.read_into r "big"
-                  ~tensor_offset:(Int64.sub size 3L) b ~dst_off:0 ~len:3);
-             assert (b = Bytes.make 3 '\000');
-             Ok ()));
-      assert (Gc.allocated_bytes () -. before < 1_000_000.));
-  print_endline
-    "unix: short reads, EINTR, truncation, lifecycle, 8 GiB sparse payload"
+  print_endline "unix: short reads, EINTR, truncation and lifecycle"
 
 type tensor = { name : string; dtype : string; shape : int list; data : string }
 
@@ -153,20 +127,51 @@ let render tensors =
     ^ "}")
     (String.concat "" (List.map (fun t -> t.data) tensors))
 
+let bigstring data =
+  Bigarray.Array1.init Bigarray.Char Bigarray.c_layout (String.length data)
+    (String.get data)
+
+let snapshot index =
+  ( Index.metadata index,
+    Index.data_start index,
+    List.map
+      (fun t ->
+        (Tensor.name t, Tensor.dtype t, Tensor.shape t, Tensor.data_offsets t))
+      (Index.tensors index) )
+
 let check tensors =
   let bytes = render tensors in
   let mem = get (Memory.of_string bytes) in
+  let big = get (Memory.of_bigstring (bigstring bytes)) in
   with_temp bytes (fun path ->
+      let mapped = get (Safetensors_unix.Mmap.open_file path) in
       get
         (Safetensors_unix.with_file path (fun f ->
-             assert (
-               Index.metadata (Memory.index mem)
-               = Index.metadata (Safetensors_unix.index f));
+             let index = snapshot (Memory.index mem) in
+             List.iter
+               (fun m -> assert (snapshot (Memory.index m) = index))
+               [ big; mapped ];
+             assert (snapshot (Safetensors_unix.index f) = index);
+             List.iter
+               (fun m ->
+                 expect Error.Missing_tensor (Memory.copy_tensor m "missing");
+                 expect Error.Missing_tensor (Memory.tensor_view m "missing"))
+               [ mem; big; mapped ];
+             expect Error.Missing_tensor (Safetensors_unix.copy_tensor f "missing");
              List.iter
                (fun t ->
-                 assert (
-                   Bytes.to_string (get (Memory.copy_tensor mem t.name))
-                   = t.data);
+                 List.iter
+                   (fun m ->
+                     let copy = get (Memory.copy_tensor m t.name) in
+                     assert (Bytes.to_string copy = t.data);
+                     let view = get (Memory.tensor_view m t.name) in
+                     assert (Bigarray.Array1.dim view = String.length t.data);
+                     String.iteri
+                       (fun i c -> assert (Bigarray.Array1.get view i = c))
+                       t.data;
+                     Bytes.fill copy 0 (Bytes.length copy) 'Q';
+                     assert (Bytes.to_string (get (Memory.copy_tensor m t.name)) = t.data))
+                   [ mem; big; mapped ];
                  assert (
                    Bytes.to_string (get (Safetensors_unix.copy_tensor f t.name))
                    = t.data);
@@ -279,39 +284,48 @@ let () =
 let () =
   let data =
     file
-      {|{"a":{"dtype":"U8","shape":[3],"data_offsets":[0,3]},"b":{"dtype":"U8","shape":[2],"data_offsets":[3,5]}}|}
+      {|{"start":{"dtype":"U8","shape":[0],"data_offsets":[0,0]},"a":{"dtype":"U8","shape":[3],"data_offsets":[0,3]},"b":{"dtype":"U8","shape":[2],"data_offsets":[3,5]},"end":{"dtype":"U8","shape":[0],"data_offsets":[5,5]}}|}
       "abcde"
   in
   with_temp data (fun path ->
+      let surviving =
+        let mapped = get (Safetensors_unix.Mmap.open_file path) in
+        List.iter
+          (fun name ->
+            let view = get (Memory.tensor_view mapped name) in
+            assert (Bigarray.Array1.dim view = 0))
+          [ "start"; "end" ];
+        get (Memory.tensor_view mapped "b")
+      in
+      Gc.full_major ();
+      Gc.compact ();
+      assert (Bigarray.Array1.get surviving 0 = 'd');
+      assert (Bigarray.Array1.get surviving 1 = 'e');
+      (* Test-only mutation proves COW aliasing without changing the file. *)
       let mapped = get (Safetensors_unix.Mmap.open_file path) in
-      let copied = get (Safetensors.Memory.of_string data) in
-      List.iter
-        (fun name ->
-          let view = get (Safetensors.Memory.tensor_view mapped name) in
-          let bytes = get (Safetensors.Memory.copy_tensor copied name) in
-          assert (Bigarray.Array1.dim view = Bytes.length bytes);
-          Bytes.iteri (fun i c -> assert (Bigarray.Array1.get view i = c)) bytes;
-          (* a [Bigstring] payload views, not copies: a write through the
-             parent bigstring would be visible; here the check is that the
-             view is a sub-array of the mapping *)
-          let again = get (Safetensors.Memory.tensor_view mapped name) in
-          assert (Bigarray.Array1.dim again = Bigarray.Array1.dim view))
-        [ "a"; "b" ];
-      expect Safetensors.Error.Missing_tensor
-        (Safetensors.Memory.tensor_view mapped "nope"));
+      let first = get (Memory.tensor_view mapped "b") in
+      let second = get (Memory.tensor_view mapped "b") in
+      Bigarray.Array1.set first 0 'Z';
+      assert (Bigarray.Array1.get second 0 = 'Z');
+      let fresh = get (Safetensors_unix.Mmap.open_file path) in
+      assert (Bytes.to_string (get (Memory.copy_tensor fresh "b")) = "de"));
   with_temp "short" (fun path ->
-      expect Safetensors.Error.Truncated (Safetensors_unix.Mmap.open_file path));
-  (* a bigstring payload is viewed without copying *)
-  let backing =
-    Bigarray.Array1.init Bigarray.Char Bigarray.c_layout (String.length data)
-      (String.get data)
+      expect Error.Truncated (Safetensors_unix.Mmap.open_file path));
+  let view =
+    let backing = bigstring data in
+    let m = get (Memory.of_bigstring backing) in
+    let view = get (Memory.tensor_view m "b") in
+    Bigarray.Array1.set backing (String.length data - 2) 'Z';
+    assert (Bigarray.Array1.get view 0 = 'Z');
+    view
   in
-  let m = get (Safetensors.Memory.of_bigstring backing) in
-  let view = get (Safetensors.Memory.tensor_view m "b") in
-  let start = String.length data - 2 in
-  Bigarray.Array1.set backing start 'Z';
+  Gc.full_major ();
+  Gc.compact ();
   assert (Bigarray.Array1.get view 0 = 'Z');
-  (* a string payload yields an independent copy *)
-  let copied = get (Safetensors.Memory.of_string data) in
-  let v = get (Safetensors.Memory.tensor_view copied "b") in
-  assert (Bigarray.Array1.get v 0 = 'd')
+  let copied = get (Memory.of_string data) in
+  let first = get (Memory.tensor_view copied "b") in
+  let second = get (Memory.tensor_view copied "b") in
+  Bigarray.Array1.set first 0 'Z';
+  assert (Bigarray.Array1.get second 0 = 'd');
+  assert (Bytes.to_string (get (Memory.copy_tensor copied "b")) = "de");
+  print_endline "views: boundary empties, alias/copy isolation and GC survival"

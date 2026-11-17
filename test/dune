@@ -16,3 +16,16 @@
  (name conformance)
  (modules conformance)
  (libraries safetensors safetensors-unix jsont jsont.bytesrw))
+
+(executable
+ (name test_large_file)
+ (modules test_large_file)
+ (libraries safetensors safetensors-unix unix))
+
+(rule
+ (alias large-file)
+ (action (run %{exe:test_large_file.exe})))
+
+(rule
+ (alias copy-limit-32)
+ (action (run %{exe:test_large_file.exe} --32-bit)))
