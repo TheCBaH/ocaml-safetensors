@@ -59,8 +59,86 @@ let bigstring_parity () =
         || Error.kind e = Error.Invalid_header)
   | Ok _ -> failwith "truncated bigstring accepted"
 
+let semantic_contexts () =
+  let name = "é\"\\\n☃" in
+  let key = {|"é\"\\\n☃"|} in
+  let prefix = {|$["é\"\\\u000a☃"]|} in
+  let locate text needle =
+    let rec loop position =
+      if position + String.length needle > String.length text then
+        failwith ("missing test location " ^ needle)
+      else if String.sub text position (String.length needle) = needle then
+        position
+      else loop (position + 1)
+    in
+    loop 0
+  in
+  let check kind field value descriptor payload =
+    let h = " \n{\n  " ^ key ^ ": " ^ descriptor ^ "\n}\n" in
+    match Memory.of_string (file h payload) with
+    | Ok _ -> failwith "semantic context case accepted"
+    | Error e ->
+        assert (Error.kind e = kind);
+        assert (Error.tensor e = Some name);
+        assert (Error.path e = Some (prefix ^ field));
+        assert (Error.json_path e = Error.path e);
+        assert (Error.byte_offset e = Some (Int64.of_int (8 + locate h value)))
+  in
+  check Error.Unsupported_dtype {|["dtype"]|} {|"NOT_A_DTYPE"|}
+    (desc ~dtype:"NOT_A_DTYPE" ())
+    "";
+  check Error.Invalid_offsets {|["data_offsets"]|} "[1,0]"
+    (desc ~offsets:"[1,0]" ()) "";
+  check Error.Size_mismatch {|["shape"]|} "[2]"
+    (desc ~shape:"[2]" ~offsets:"[0,1]" ())
+    "x";
+  check Error.Invalid_offsets {|["data_offsets"]|} "[1,2]"
+    (desc ~shape:"[1]" ~offsets:"[1,2]" ())
+    "xy";
+  check Error.Invalid_header {|["data_offsets"]|} {|{"dtype"|}
+    {|{"dtype":"U8","shape":[0]}|} "";
+  let h = " \n{}" in
+  match Memory.of_string (file h "x") with
+  | Error e ->
+      assert (Error.kind e = Error.Size_mismatch);
+      assert (Error.path e = Some "$");
+      assert (Error.byte_offset e = Some 10L)
+  | Ok _ -> failwith "unindexed bytes accepted"
+
+let prefix_cases () =
+  let prefix n =
+    String.init 8 (fun i ->
+        Char.chr
+          (Int64.to_int
+             (Int64.logand 255L (Int64.shift_right_logical n (8 * i)))))
+  in
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Ok actual -> assert (actual = Int64.to_int n)
+      | Error e ->
+          assert (n > Int64.of_int Sys.max_string_length);
+          assert (Error.kind e = Error.Resource_limit))
+    [ 0L; 1L; 255L; 256L; 65536L; 100_000_000L ];
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Error e -> assert (Error.kind e = Error.Resource_limit)
+      | Ok _ -> failwith "oversized header prefix accepted")
+    [ 100_000_001L; 4294967296L; Int64.max_int ];
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Error e -> assert (Error.kind e = Error.Invalid_integer)
+      | Ok _ -> failwith "unsigned header prefix accepted")
+    [ Int64.min_int; -1L ];
+  let padded = prefix 65536L ^ "{}" ^ String.make 65534 ' ' in
+  ignore (get (Memory.of_string padded))
+
 let run () =
+  prefix_cases ();
   bigstring_parity ();
+  semantic_contexts ();
   let dtype_sizes =
     [
       ("BOOL", 1);
@@ -76,6 +154,12 @@ let run () =
       ("BF16", 2);
       ("F32", 4);
       ("F64", 8);
+      ("F8_E5M2", 1);
+      ("F8_E4M3", 1);
+      ("F8_E8M0", 1);
+      ("F8_E4M3FNUZ", 1);
+      ("F8_E5M2FNUZ", 1);
+      ("C64", 8);
     ]
   in
   List.iter
@@ -128,15 +212,15 @@ let run () =
     [
       ("syntax", "{", Error.Invalid_json);
       ("utf8", "{\"\255\":{}}", Error.Invalid_json);
-      ("root-array", "[]", Error.Invalid_json);
-      ("root-null", "null", Error.Invalid_json);
+      ("root-array", "[]", Error.Invalid_header);
+      ("root-null", "null", Error.Invalid_header);
       ("trailing", "{}x", Error.Invalid_json);
       ("nul-padding", "{}\000", Error.Invalid_json);
       ("missing", {|{"x":{"dtype":"U8","shape":[0]}}|}, Error.Invalid_header);
       ( "unknown",
         {|{"x":{"dtype":"U8","shape":[0],"data_offsets":[0,0],"extra":"x"}}|},
         Error.Invalid_header );
-      ("dtype", header (desc ~dtype:"F8_E4M3" ()), Error.Unsupported_dtype);
+      ("dtype", header (desc ~dtype:"UNKNOWN" ()), Error.Unsupported_dtype);
       ( "root-dup",
         "{\"x\":" ^ tensor_json ^ ",\"x\":" ^ tensor_json ^ "}",
         Error.Duplicate_member );
@@ -159,7 +243,7 @@ let run () =
         {|{"__metadata__":{},"__metadata__":{}}|},
         Error.Duplicate_member );
       ("metadata-value", {|{"__metadata__":{"a":[0]}}|}, Error.Invalid_header);
-      ("metadata-null", {|{"__metadata__":null}|}, Error.Invalid_json);
+      ("metadata-null", {|{"__metadata__":null}|}, Error.Invalid_header);
       ("offset-length", header (desc ~offsets:"[0]" ()), Error.Invalid_offsets);
       ("negative", header (desc ~shape:"[-1]" ()), Error.Invalid_integer);
       ("negative-zero", header (desc ~shape:"[-0]" ()), Error.Invalid_integer);
@@ -168,27 +252,27 @@ let run () =
         header (desc ~shape:"[1.0000000000000000001]" ()),
         Error.Invalid_integer );
       ("exponent", header (desc ~shape:"[0e0]" ()), Error.Invalid_integer);
-      ("string-integer", header (desc ~shape:"[\"0\"]" ()), Error.Invalid_json);
-      ("null-integer", header (desc ~shape:"[null]" ()), Error.Invalid_integer);
+      ("string-integer", header (desc ~shape:"[\"0\"]" ()), Error.Invalid_header);
+      ("null-integer", header (desc ~shape:"[null]" ()), Error.Invalid_header);
       ( "overflow",
         header (desc ~shape:"[9223372036854775808,0]" ()),
-        Error.Resource_limit );
+        Error.Invalid_integer );
       ( "multiplication",
         header (desc ~shape:"[9223372036854775807,2]" ()),
-        Error.Resource_limit );
+        Error.Invalid_integer );
       ( "width-overflow",
         header (desc ~dtype:"F64" ~shape:"[9223372036854775807]" ()),
-        Error.Resource_limit );
+        Error.Invalid_integer );
       ("mismatch", header (desc ~shape:"[1]" ()), Error.Size_mismatch);
       ("reverse", header (desc ~offsets:"[1,0]" ()), Error.Invalid_offsets);
       ("beyond", header (desc ~offsets:"[0,1]" ()), Error.Invalid_offsets);
-      ("nested", {|{"x":{"shape":[[[[[[[[]]]]]]]]}}|}, Error.Invalid_json);
+      ("nested", {|{"x":{"shape":[[[[[[[[]]]]]]]]}}|}, Error.Invalid_header);
     ]
   in
   List.iter (fun (label, h, kind) -> reject label kind (file h "")) bad_headers;
   reject "short-prefix" Error.Truncated "1234567";
   reject "short-header" Error.Truncated (String.sub (file "{}" "") 0 9);
-  reject "unsigned-prefix" Error.Resource_limit (String.make 8 '\255');
+  reject "unsigned-prefix" Error.Invalid_integer (String.make 8 '\255');
   reject "unindexed-data" Error.Size_mismatch (file "{}" "a");
   reject "overlap" Error.Invalid_offsets
     (file
@@ -203,14 +287,11 @@ let run () =
   check_limit (Limits.make ~max_tensors:0 ()) (header (desc ()));
   check_limit (Limits.make ~max_rank:0 ()) (header (desc ()));
   check_limit (Limits.make ~max_name_bytes:0 ()) (header (desc ()));
-  check_limit (Limits.make ~max_depth:1 ()) (header (desc ()));
-  check_limit (Limits.make ~max_depth:2 ()) (header (desc ()));
   check_limit
     (Limits.make ~max_metadata_entries:0 ())
     {|{"__metadata__":{"a":"b"}}|};
   let tight =
-    get
-      (Limits.make ~max_tensors:1 ~max_rank:1 ~max_name_bytes:12 ~max_depth:3 ())
+    get (Limits.make ~max_tensors:1 ~max_rank:1 ~max_name_bytes:12 ())
   in
   ignore (get (Memory.of_string ~limits:tight (file (header (desc ())) "")));
   (match Limits.make ~max_tensors:(-1) () with
@@ -219,6 +300,78 @@ let run () =
   (match Memory.copy_tensor r "absent" with
   | Error e -> assert (Error.kind e = Error.Missing_tensor)
   | _ -> assert false);
+  let boundary make headers =
+    let limits = get (make 2) in
+    List.iteri
+      (fun i h ->
+        let result = Memory.of_string ~limits (file h "") in
+        if i < 2 then ignore (get result)
+        else
+          match result with
+          | Error e -> assert (Error.kind e = Error.Resource_limit)
+          | Ok _ -> failwith "limit+1 accepted")
+      headers
+  in
+  boundary
+    (fun n -> Limits.make ~max_rank:n ())
+    (List.map
+       (fun n ->
+         header
+           (desc
+              ~shape:("[" ^ String.concat "," (List.init n (fun _ -> "0")) ^ "]")
+              ()))
+       [ 1; 2; 3 ]);
+  boundary
+    (fun _ -> Limits.make ~max_name_bytes:12 ())
+    (List.map
+       (fun n ->
+         "{" ^ Printf.sprintf "%S" (String.make n 'x') ^ ":" ^ desc () ^ "}")
+       [ 11; 12; 13 ]);
+  boundary
+    (fun n -> Limits.make ~max_tensors:n ())
+    (List.map
+       (fun n ->
+         "{"
+         ^ String.concat ","
+             (List.init n (fun i ->
+                  Printf.sprintf "%S:%s" (string_of_int i) (desc ())))
+         ^ "}")
+       [ 1; 2; 3 ]);
+  boundary
+    (fun n -> Limits.make ~max_metadata_entries:n ())
+    (List.map
+       (fun n ->
+         "{\"__metadata__\":{"
+         ^ String.concat ","
+             (List.init n (fun i -> Printf.sprintf "%S:\"v\"" (string_of_int i)))
+         ^ "}}")
+       [ 1; 2; 3 ]);
+  let header_limit = get (Limits.make ~max_header_bytes:3 ()) in
+  List.iter
+    (fun h -> ignore (get (Memory.of_string ~limits:header_limit (file h ""))))
+    [ "{}"; "{} " ];
+  reject ~limits:header_limit "header limit+1" Error.Resource_limit
+    (file "{}  " "");
+  List.iter
+    (fun rank ->
+      let h =
+        header
+          (desc
+             ~shape:
+               ("[" ^ String.concat "," (List.init rank (fun _ -> "0")) ^ "]")
+             ())
+      in
+      if rank <= 64 then ignore (accepted h "")
+      else reject "default rank+1" Error.Resource_limit (file h ""))
+    [ 63; 64; 65 ];
+  List.iter
+    (fun length ->
+      let h =
+        "{" ^ Printf.sprintf "%S" (String.make length 'x') ^ ":" ^ desc () ^ "}"
+      in
+      if length <= 4096 then ignore (accepted h "")
+      else reject "default name+1" Error.Resource_limit (file h ""))
+    [ 4095; 4096; 4097 ];
   let precise =
     header (desc ~shape:"[9007199254740993]" ~offsets:"[0,9007199254740993]" ())
   in
@@ -238,8 +391,52 @@ let run () =
       assert (Error.byte_offset e <> None)
   | _ -> assert false);
   Printf.printf
-    "core: 13 dtypes, exact int64, %d malformed cases, layout and limits\n"
+    "core: 19 dtypes, exact int64, %d malformed cases, layout and limits\n"
     (List.length bad_headers)
+
+let wide_run () =
+  let count = 100_000 in
+  let header entries =
+    let buffer = Buffer.create (count * 65) in
+    Buffer.add_char buffer '{';
+    for i = 0 to count - 1 do
+      if i > 0 then Buffer.add_char buffer ',';
+      entries buffer i
+    done;
+    Buffer.add_char buffer '}';
+    Buffer.contents buffer
+  in
+  let tensors =
+    header (fun buffer i ->
+        Printf.bprintf buffer
+          {|"t%06d":{"dtype":"U8","shape":[0],"data_offsets":[0,0]}|} i)
+  in
+  let decode ?limits h =
+    Index.decode_header ?limits
+      ~file_size:(Int64.of_int (String.length h + 8))
+      h
+  in
+  let index = get (decode tensors) in
+  let descriptors = Index.tensors index in
+  assert (List.length descriptors = count);
+  assert (Tensor.name (List.hd descriptors) = "t000000");
+  assert (Index.find index "t099999" <> None);
+  let limits = get (Limits.make ~max_tensors:(count - 1) ()) in
+  (match decode ~limits tensors with
+  | Error e -> assert (Error.kind e = Error.Resource_limit)
+  | Ok _ -> failwith "default-scale tensor limit+1 accepted");
+  let members =
+    header (fun buffer i -> Printf.bprintf buffer {|"m%06d":"v"|} i)
+  in
+  let metadata = "{\"__metadata__\":" ^ members ^ "}" in
+  assert (List.length (Index.metadata (get (decode metadata))) = count);
+  let limits = get (Limits.make ~max_metadata_entries:(count - 1) ()) in
+  (match decode ~limits metadata with
+  | Error e -> assert (Error.kind e = Error.Resource_limit)
+  | Ok _ -> failwith "default-scale metadata limit+1 accepted");
+  print_endline
+    "wide: 100000 tensors and metadata entries; deterministic descriptors and \
+     cap+1 rejection"
 
 let fixtures read =
   List.iter

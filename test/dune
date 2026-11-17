@@ -1,10 +1,16 @@
+(library
+ (name test_cases)
+ (wrapped false)
+ (modules core_cases)
+ (libraries safetensors))
+
 (test
  (name test_core)
- (modules test_core core_cases)
+ (modules test_core)
  (deps
   (glob_files fixtures/*.safetensors))
  (package safetensors)
- (libraries safetensors))
+ (libraries safetensors test_cases))
 
 (test
  (name test_reader)
@@ -16,3 +22,24 @@
  (name conformance)
  (modules conformance)
  (libraries safetensors safetensors-unix jsont jsont.bytesrw))
+
+(executable
+ (name test_large_file)
+ (modules test_large_file)
+ (libraries safetensors safetensors-unix unix))
+
+(rule
+ (alias large-file)
+ (action
+  (run %{exe:test_large_file.exe})))
+
+(rule
+ (alias copy-limit-32)
+ (action
+  (run %{exe:test_large_file.exe} --32-bit)))
+
+(test
+ (name test_wide)
+ (modules test_wide)
+ (package safetensors)
+ (libraries safetensors test_cases))
