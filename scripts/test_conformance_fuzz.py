@@ -58,6 +58,41 @@ class ReductionTests(unittest.TestCase):
             self.assertEqual(Path(replay['minimized']).read_bytes(), b'!')
             self.assertEqual(replay['versions'], {'reader': 'test'})
 
+    def test_dotted_fixture_names_keep_distinct_digest_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            recorder = Recorder(directory, {}, {})
+            for data in (b'first!', b'second!'):
+                with self.assertRaises(AssertionError):
+                    recorder.check(data, lambda value: ('trigger', None) if b'!' in value else None,
+                                   case='layout.safetensors', mutation='fixture')
+            replays = list(Path(directory).glob('*.json'))
+            self.assertEqual(len(replays), 2)
+            originals = [Path(json.loads(path.read_text())['original']).read_bytes()
+                         for path in replays]
+            self.assertCountEqual(originals, [b'first!', b'second!'])
+
+    def test_reduction_cannot_reverse_acceptance_disagreement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            recorder = Recorder(directory, {}, {})
+            def observe(data):
+                if b'original' in data:
+                    return 'acceptance-disagreement:reference=False:ocaml=True', None
+                if data:
+                    return 'acceptance-disagreement:reference=True:ocaml=False', None
+                return None
+            with self.assertRaises(AssertionError):
+                recorder.check(b'original suffix', observe)
+            replay = json.loads(next(Path(directory).glob('*.json')).read_text())
+            self.assertIn(b'original', Path(replay['minimized']).read_bytes())
+            self.assertEqual(replay['failure'][0], replay['minimized_failure'][0])
+
+    def test_expired_reduction_budget_keeps_original(self):
+        def should_not_run(_data):
+            self.fail('predicate ran after its reduction deadline')
+        reduced, attempts = reduce_failure(b'original', should_not_run, time_budget=0)
+        self.assertEqual(reduced, b'original')
+        self.assertEqual(attempts, 0)
+
     def test_seed_replays_identical_mutations(self):
         self.assertEqual(list(mutations(1337, 5)), list(mutations(1337, 5)))
         self.assertTrue(any(op == 'prefix-preserving-byte' for _, op, _, _ in mutations(1337, 1)))

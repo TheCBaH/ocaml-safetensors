@@ -15,7 +15,7 @@ import safetensors
 from safetensors import deserialize, safe_open
 from fetch_fixtures import ROOT, LOCK, load_lock, fixture_path, verify
 from reference_versions import assert_reference_versions
-from conformance_fuzz import Recorder, mutations, unpack
+from conformance_fuzz import Recorder, frame, mutations, unpack
 
 EXE = ROOT / '_build/default/test/conformance.exe'
 REPORTS = ROOT / '.cache/reports'
@@ -222,14 +222,62 @@ def policy_difference(data, reference_accepts, actual):
                 if kind == 'resource_limit' and len(shape) > 64 and path.startswith(prefix + '["shape"]'):
                     return 'configured rank limit'
     if actual['ok'] and not reference_accepts:
-        for tensor in header.values():
-            if not isinstance(tensor, dict):
+        # Revalidate the whole file with only zero-sized overflowing shapes
+        # normalized. The presence of one such shape cannot excuse another
+        # malformed tensor, an unknown field, or incorrect accepted bytes.
+        def unique_members(items):
+            result = {}
+            for key, value in items:
+                if key in result:
+                    raise ValueError('duplicate member')
+                result[key] = value
+            return result
+        try:
+            size = struct.unpack('<Q', data[:8])[0]
+            normalized = json.loads(data[8:8 + size], object_pairs_hook=unique_members)
+        except (ValueError, UnicodeError):
+            return None
+        if size > 100000000 or sum(name != '__metadata__' for name in normalized) > 100000:
+            return None
+        metadata = normalized.get('__metadata__', {})
+        if (not isinstance(metadata, dict) or len(metadata) > 100000
+                or any(len(name.encode('utf-8')) > 4096 for name in metadata)):
+            return None
+        restored_shapes = {}
+        supported = {'BOOL', 'U8', 'I8', 'U16', 'I16', 'U32', 'I32',
+                     'U64', 'I64', 'F16', 'BF16', 'F32', 'F64',
+                     'F8_E5M2', 'F8_E4M3', 'F8_E8M0',
+                     'F8_E4M3FNUZ', 'F8_E5M2FNUZ', 'C64'}
+        for name, tensor in normalized.items():
+            if len(name.encode('utf-8')) > 4096:
+                return None
+            if name == '__metadata__':
                 continue
-            shape = tensor.get('shape')
+            if (not isinstance(tensor, dict)
+                    or set(tensor) != {'dtype', 'shape', 'data_offsets'}
+                    or not isinstance(tensor['dtype'], str)
+                    or tensor['dtype'] not in supported):
+                return None
+            shape = tensor['shape']
+            if (not isinstance(shape, list) or len(shape) > 64
+                    or not all(type(n) is int and 0 <= n <= 9223372036854775807 for n in shape)):
+                return None
             if (isinstance(shape, list) and 0 in shape
                     and all(type(n) is int and 0 <= n <= 9223372036854775807 for n in shape)
                     and math.prod(n for n in shape if n) > 18446744073709551615):
-                return 'zero dimensions checked before intermediate product overflow'
+                restored_shapes[name] = shape
+                tensor['shape'] = [0]
+        if not restored_shapes:
+            return None
+        try:
+            expected = dict(deserialize(frame(normalized, data[8 + size:])))
+        except safetensors.SafetensorError:
+            return None
+        for name, shape in restored_shapes.items():
+            expected[name]['shape'] = shape
+        if accepted_mismatch(data, header, expected, actual) is None:
+            return 'zero dimensions checked before intermediate product overflow'
+
     return None
 
 
@@ -244,11 +292,19 @@ def observe(data, path):
     if actual['ok'] != reference_accepts:
         if policy_difference(data, reference_accepts, actual):
             return None
-        return 'acceptance-disagreement', {'reference_accepts': reference_accepts, 'ocaml': actual}
+        signature = f'acceptance-disagreement:reference={reference_accepts}:ocaml={actual["ok"]}'
+        if not actual['ok']:
+            signature += ':rejection=' + json.dumps([actual['kind'], actual.get('path')], ensure_ascii=False)
+        return signature, {'reference_accepts': reference_accepts, 'ocaml': actual}
     if not reference_accepts:
         return None
-    decoded = unpack(data)
-    header, _ = decoded
+    header, _ = unpack(data)
+    return accepted_mismatch(data, header, expected, actual)
+
+
+def accepted_mismatch(data, header, expected, actual):
+    if actual['data_start'] != struct.unpack('<Q', data[:8])[0] + 8:
+        return 'data-start', actual
     got = {tensor['name']: tensor for tensor in actual['tensors']}
     if len(got) != len(actual['tensors']) or got.keys() != expected.keys():
         return 'tensor-names', actual
@@ -281,7 +337,14 @@ def differential(recorder):
 
 
 def create_recorder(versions=None):
-    return Recorder(REPORTS/'failures', versions or assert_reference_versions(),
+    provenance = dict(versions or assert_reference_versions())
+    provenance.update(
+        python=platform.python_version(),
+        reader_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+        reader_dirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT)),
+        reader_executable_sha256=hashlib.sha256(EXE.read_bytes()).hexdigest(),
+        reference_requirements_sha256=hashlib.sha256((ROOT/'scripts/reference-requirements.txt').read_bytes()).hexdigest())
+    return Recorder(REPORTS/'failures', provenance,
                     {'address_space_bytes': 512 * 1024 * 1024,
                      'cpu_seconds': 10, 'max_rank': 64,
                      'max_tensors': 100000, 'max_name_bytes': 4096,

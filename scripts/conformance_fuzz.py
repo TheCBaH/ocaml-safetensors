@@ -4,6 +4,7 @@ import hashlib
 import json
 import random
 import struct
+import time
 from pathlib import Path
 
 
@@ -125,11 +126,14 @@ def candidates(data):
             yield data[:start] + data[start + width:]
 
 
-def reduce_failure(data, predicate, budget=300):
+def reduce_failure(data, predicate, budget=300, time_budget=30):
     current, attempts = data, 0
-    while attempts < budget:
+    deadline = time.monotonic() + time_budget
+    while attempts < budget and time.monotonic() < deadline:
         changed = False
         for candidate in candidates(current):
+            if time.monotonic() >= deadline:
+                break
             if len(candidate) >= len(current):
                 continue
             attempts += 1
@@ -166,15 +170,15 @@ class Recorder:
         self.directory.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256(data).hexdigest()[:16]
         prefix = self.directory / f'{seed}-{case}-{mutation}-{digest}'
-        original = prefix.with_suffix('.safetensors')
+        original = Path(str(prefix) + '.safetensors')
         original.write_bytes(data)
         details = {'seed': seed, 'case': case, 'mutation': mutation, 'location': location,
                    'versions': self.versions, 'limits': self.limits, 'failure': result,
                    'original': str(original), 'sha256': hashlib.sha256(data).hexdigest()}
-        replay = prefix.with_suffix('.json')
+        replay = Path(str(prefix) + '.json')
         replay.write_text(json.dumps(details, indent=2, sort_keys=True) + '\n')
         minimal, attempts = reduce_failure(data, lambda value: (failure(value) or (None,))[0] == signature)
-        target = prefix.with_suffix('.min.safetensors')
+        target = Path(str(prefix) + '.min.safetensors')
         target.write_bytes(minimal)
         details.update(minimized=str(target), reduction_attempts=attempts,
                        minimized_failure=failure(minimal))
