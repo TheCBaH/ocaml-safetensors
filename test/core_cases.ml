@@ -67,7 +67,8 @@ let semantic_contexts () =
     let rec loop position =
       if position + String.length needle > String.length text then
         failwith ("missing test location " ^ needle)
-      else if String.sub text position (String.length needle) = needle then position
+      else if String.sub text position (String.length needle) = needle then
+        position
       else loop (position + 1)
     in
     loop 0
@@ -84,24 +85,58 @@ let semantic_contexts () =
         assert (Error.byte_offset e = Some (Int64.of_int (8 + locate h value)))
   in
   check Error.Unsupported_dtype {|["dtype"]|} {|"NOT_A_DTYPE"|}
-    (desc ~dtype:"NOT_A_DTYPE" ()) "";
+    (desc ~dtype:"NOT_A_DTYPE" ())
+    "";
   check Error.Invalid_offsets {|["data_offsets"]|} "[1,0]"
     (desc ~offsets:"[1,0]" ()) "";
   check Error.Size_mismatch {|["shape"]|} "[2]"
-    (desc ~shape:"[2]" ~offsets:"[0,1]" ()) "x";
+    (desc ~shape:"[2]" ~offsets:"[0,1]" ())
+    "x";
   check Error.Invalid_offsets {|["data_offsets"]|} "[1,2]"
-    (desc ~shape:"[1]" ~offsets:"[1,2]" ()) "xy";
+    (desc ~shape:"[1]" ~offsets:"[1,2]" ())
+    "xy";
   check Error.Invalid_header {|["data_offsets"]|} {|{"dtype"|}
     {|{"dtype":"U8","shape":[0]}|} "";
   let h = " \n{}" in
-  (match Memory.of_string (file h "x") with
+  match Memory.of_string (file h "x") with
   | Error e ->
       assert (Error.kind e = Error.Size_mismatch);
       assert (Error.path e = Some "$");
       assert (Error.byte_offset e = Some 10L)
-  | Ok _ -> failwith "unindexed bytes accepted")
+  | Ok _ -> failwith "unindexed bytes accepted"
+
+let prefix_cases () =
+  let prefix n =
+    String.init 8 (fun i ->
+        Char.chr
+          (Int64.to_int
+             (Int64.logand 255L (Int64.shift_right_logical n (8 * i)))))
+  in
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Ok actual -> assert (actual = Int64.to_int n)
+      | Error e ->
+          assert (n > Int64.of_int Sys.max_string_length);
+          assert (Error.kind e = Error.Resource_limit))
+    [ 0L; 1L; 255L; 256L; 65536L; 100_000_000L ];
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Error e -> assert (Error.kind e = Error.Resource_limit)
+      | Ok _ -> failwith "oversized header prefix accepted")
+    [ 100_000_001L; 4294967296L; Int64.max_int ];
+  List.iter
+    (fun n ->
+      match Index.header_length ~file_size:Int64.max_int (prefix n) with
+      | Error e -> assert (Error.kind e = Error.Invalid_integer)
+      | Ok _ -> failwith "unsigned header prefix accepted")
+    [ Int64.min_int; -1L ];
+  let padded = prefix 65536L ^ "{}" ^ String.make 65534 ' ' in
+  ignore (get (Memory.of_string padded))
 
 let run () =
+  prefix_cases ();
   bigstring_parity ();
   semantic_contexts ();
   let dtype_sizes =
@@ -256,8 +291,7 @@ let run () =
     (Limits.make ~max_metadata_entries:0 ())
     {|{"__metadata__":{"a":"b"}}|};
   let tight =
-    get
-      (Limits.make ~max_tensors:1 ~max_rank:1 ~max_name_bytes:12 ())
+    get (Limits.make ~max_tensors:1 ~max_rank:1 ~max_name_bytes:12 ())
   in
   ignore (get (Memory.of_string ~limits:tight (file (header (desc ())) "")));
   (match Limits.make ~max_tensors:(-1) () with
@@ -272,31 +306,69 @@ let run () =
       (fun i h ->
         let result = Memory.of_string ~limits (file h "") in
         if i < 2 then ignore (get result)
-        else match result with
+        else
+          match result with
           | Error e -> assert (Error.kind e = Error.Resource_limit)
           | Ok _ -> failwith "limit+1 accepted")
       headers
   in
-  boundary (fun n -> Limits.make ~max_rank:n ())
-    (List.map (fun n -> header (desc ~shape:("[" ^ String.concat "," (List.init n (fun _ -> "0")) ^ "]") ())) [ 1; 2; 3 ]);
-  boundary (fun _ -> Limits.make ~max_name_bytes:12 ())
-    (List.map (fun n -> "{" ^ Printf.sprintf "%S" (String.make n 'x') ^ ":" ^ desc () ^ "}") [ 11; 12; 13 ]);
-  boundary (fun n -> Limits.make ~max_tensors:n ())
-    (List.map (fun n -> "{" ^ String.concat "," (List.init n (fun i -> Printf.sprintf "%S:%s" (string_of_int i) (desc ()))) ^ "}") [ 1; 2; 3 ]);
-  boundary (fun n -> Limits.make ~max_metadata_entries:n ())
-    (List.map (fun n -> "{\"__metadata__\":{" ^ String.concat "," (List.init n (fun i -> Printf.sprintf "%S:\"v\"" (string_of_int i))) ^ "}}") [ 1; 2; 3 ]);
+  boundary
+    (fun n -> Limits.make ~max_rank:n ())
+    (List.map
+       (fun n ->
+         header
+           (desc
+              ~shape:("[" ^ String.concat "," (List.init n (fun _ -> "0")) ^ "]")
+              ()))
+       [ 1; 2; 3 ]);
+  boundary
+    (fun _ -> Limits.make ~max_name_bytes:12 ())
+    (List.map
+       (fun n ->
+         "{" ^ Printf.sprintf "%S" (String.make n 'x') ^ ":" ^ desc () ^ "}")
+       [ 11; 12; 13 ]);
+  boundary
+    (fun n -> Limits.make ~max_tensors:n ())
+    (List.map
+       (fun n ->
+         "{"
+         ^ String.concat ","
+             (List.init n (fun i ->
+                  Printf.sprintf "%S:%s" (string_of_int i) (desc ())))
+         ^ "}")
+       [ 1; 2; 3 ]);
+  boundary
+    (fun n -> Limits.make ~max_metadata_entries:n ())
+    (List.map
+       (fun n ->
+         "{\"__metadata__\":{"
+         ^ String.concat ","
+             (List.init n (fun i -> Printf.sprintf "%S:\"v\"" (string_of_int i)))
+         ^ "}}")
+       [ 1; 2; 3 ]);
   let header_limit = get (Limits.make ~max_header_bytes:3 ()) in
-  List.iter (fun h -> ignore (get (Memory.of_string ~limits:header_limit (file h "")))) [ "{}"; "{} " ];
-  reject ~limits:header_limit "header limit+1" Error.Resource_limit (file "{}  " "");
+  List.iter
+    (fun h -> ignore (get (Memory.of_string ~limits:header_limit (file h ""))))
+    [ "{}"; "{} " ];
+  reject ~limits:header_limit "header limit+1" Error.Resource_limit
+    (file "{}  " "");
   List.iter
     (fun rank ->
-      let h = header (desc ~shape:("[" ^ String.concat "," (List.init rank (fun _ -> "0")) ^ "]") ()) in
+      let h =
+        header
+          (desc
+             ~shape:
+               ("[" ^ String.concat "," (List.init rank (fun _ -> "0")) ^ "]")
+             ())
+      in
       if rank <= 64 then ignore (accepted h "")
       else reject "default rank+1" Error.Resource_limit (file h ""))
     [ 63; 64; 65 ];
   List.iter
     (fun length ->
-      let h = "{" ^ Printf.sprintf "%S" (String.make length 'x') ^ ":" ^ desc () ^ "}" in
+      let h =
+        "{" ^ Printf.sprintf "%S" (String.make length 'x') ^ ":" ^ desc () ^ "}"
+      in
       if length <= 4096 then ignore (accepted h "")
       else reject "default name+1" Error.Resource_limit (file h ""))
     [ 4095; 4096; 4097 ];
@@ -334,12 +406,15 @@ let wide_run () =
     Buffer.add_char buffer '}';
     Buffer.contents buffer
   in
-  let tensors = header (fun buffer i ->
-    Printf.bprintf buffer
-      {|"t%06d":{"dtype":"U8","shape":[0],"data_offsets":[0,0]}|} i)
+  let tensors =
+    header (fun buffer i ->
+        Printf.bprintf buffer
+          {|"t%06d":{"dtype":"U8","shape":[0],"data_offsets":[0,0]}|} i)
   in
   let decode ?limits h =
-    Index.decode_header ?limits ~file_size:(Int64.of_int (String.length h + 8)) h
+    Index.decode_header ?limits
+      ~file_size:(Int64.of_int (String.length h + 8))
+      h
   in
   let index = get (decode tensors) in
   let descriptors = Index.tensors index in
@@ -350,14 +425,18 @@ let wide_run () =
   (match decode ~limits tensors with
   | Error e -> assert (Error.kind e = Error.Resource_limit)
   | Ok _ -> failwith "default-scale tensor limit+1 accepted");
-  let members = header (fun buffer i -> Printf.bprintf buffer {|"m%06d":"v"|} i) in
+  let members =
+    header (fun buffer i -> Printf.bprintf buffer {|"m%06d":"v"|} i)
+  in
   let metadata = "{\"__metadata__\":" ^ members ^ "}" in
   assert (List.length (Index.metadata (get (decode metadata))) = count);
   let limits = get (Limits.make ~max_metadata_entries:(count - 1) ()) in
   (match decode ~limits metadata with
   | Error e -> assert (Error.kind e = Error.Resource_limit)
   | Ok _ -> failwith "default-scale metadata limit+1 accepted");
-  print_endline "wide: 100000 tensors and metadata entries; deterministic descriptors and cap+1 rejection"
+  print_endline
+    "wide: 100000 tensors and metadata entries; deterministic descriptors and \
+     cap+1 rejection"
 
 let fixtures read =
   List.iter

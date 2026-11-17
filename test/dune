@@ -30,11 +30,13 @@
 
 (rule
  (alias large-file)
- (action (run %{exe:test_large_file.exe})))
+ (action
+  (run %{exe:test_large_file.exe})))
 
 (rule
  (alias copy-limit-32)
- (action (run %{exe:test_large_file.exe} --32-bit)))
+ (action
+  (run %{exe:test_large_file.exe} --32-bit)))
 
 (test
  (name test_wide)

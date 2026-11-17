@@ -8,13 +8,11 @@ let json_quote s =
     (function
       | '"' -> Buffer.add_string b "\\\""
       | '\\' -> Buffer.add_string b "\\\\"
-      | c when Char.code c < 0x20 ->
-          Printf.bprintf b "\\u%04x" (Char.code c)
+      | c when Char.code c < 0x20 -> Printf.bprintf b "\\u%04x" (Char.code c)
       | c -> Buffer.add_char b c)
     s;
   Buffer.add_char b '"';
   Buffer.contents b
-
 
 module Error = struct
   type kind =
@@ -67,7 +65,9 @@ module Error = struct
 
   let pp ppf e =
     Format.fprintf ppf "%s: %s" (kind_name e.kind) e.message;
-    Option.iter (fun n -> Format.fprintf ppf " (tensor %s)" (json_quote n)) e.tensor;
+    Option.iter
+      (fun n -> Format.fprintf ppf " (tensor %s)" (json_quote n))
+      e.tensor;
     Option.iter (fun n -> Format.fprintf ppf " at byte %Ld" n) e.byte_offset;
     Option.iter (fun p -> Format.fprintf ppf " [%s]" p) e.path
 end
@@ -100,8 +100,7 @@ module Limits = struct
   let make ?(max_header_bytes = default.max_header_bytes)
       ?(max_tensors = default.max_tensors) ?(max_rank = default.max_rank)
       ?(max_name_bytes = default.max_name_bytes)
-      ?(max_metadata_entries = default.max_metadata_entries)
-      () =
+      ?(max_metadata_entries = default.max_metadata_entries) () =
     protect (fun () ->
         if
           List.exists
@@ -180,12 +179,15 @@ module Dtype = struct
   let of_string s =
     match List.assoc_opt s all with
     | Some d -> Ok d
-    | None -> Error (Error.make Error.Unsupported_dtype ("unsupported dtype: " ^ s))
+    | None ->
+        Error (Error.make Error.Unsupported_dtype ("unsupported dtype: " ^ s))
 
   let to_string d = fst (List.find (fun (_, v) -> v = d) all)
 
   let byte_width = function
-    | Bool | U8 | I8 | F8_E5M2 | F8_E4M3 | F8_E8M0 | F8_E4M3FNUZ | F8_E5M2FNUZ -> 1
+    | Bool | U8 | I8 | F8_E5M2 | F8_E4M3 | F8_E8M0 | F8_E4M3FNUZ | F8_E5M2FNUZ
+      ->
+        1
     | U16 | I16 | F16 | BF16 -> 2
     | U32 | I32 | F32 -> 4
     | U64 | I64 | F64 | C64 -> 8
@@ -223,7 +225,6 @@ let location meta =
   if Jsont.Textloc.is_none loc then None
   else Some (Int64.add 8L (Int64.of_int (Jsont.Textloc.first_byte loc)))
 
-
 let member_path name = "[" ^ json_quote name ^ "]"
 
 let decode_json limits header =
@@ -247,19 +248,23 @@ let decode_json limits header =
         ~dec_add:(fun _ _ _ () -> ())
         ~dec_finish:(fun _ () -> assert false)
     in
-    Jsont.Object.map Fun.id |> Jsont.Object.keep_unknown members
+    Jsont.Object.map Fun.id
+    |> Jsont.Object.keep_unknown members
     |> Jsont.Object.finish
   in
   let expected ?dec_number ?dec_string ?dec_array ?dec_object () =
     Jsont.any
       ~dec_null:(Jsont.Base.null (Jsont.Base.map ~dec:reject ()))
       ~dec_bool:(Jsont.Base.bool (Jsont.Base.map ~dec:reject ()))
-      ~dec_number:(Option.value dec_number
-                     ~default:(Jsont.Base.number (Jsont.Base.map ~dec:reject ())))
-      ~dec_string:(Option.value dec_string
-                     ~default:(Jsont.Base.string (Jsont.Base.map ~dec:reject ())))
+      ~dec_number:
+        (Option.value dec_number
+           ~default:(Jsont.Base.number (Jsont.Base.map ~dec:reject ())))
+      ~dec_string:
+        (Option.value dec_string
+           ~default:(Jsont.Base.string (Jsont.Base.map ~dec:reject ())))
       ~dec_array:(Option.value dec_array ~default:(rejected_array ()))
-      ~dec_object:(Option.value dec_object ~default:(rejected_object ())) ()
+      ~dec_object:(Option.value dec_object ~default:(rejected_object ()))
+      ()
   in
   let check_name meta name =
     if String.length name > limits.Limits.max_name_bytes then
@@ -273,9 +278,12 @@ let decode_json limits header =
              let loc = Jsont.Meta.textloc meta in
              let first = Jsont.Textloc.first_byte loc in
              let last = Jsont.Textloc.last_byte loc in
-             if Jsont.Textloc.is_none loc || first < 0 || last < first
-                || last >= String.length header then
-               abort meta Error.Invalid_integer "missing integer source location";
+             if
+               Jsont.Textloc.is_none loc || first < 0 || last < first
+               || last >= String.length header
+             then
+               abort meta Error.Invalid_integer
+                 "missing integer source location";
              let value = ref 0L in
              for i = first to last do
                let c = header.[i] in
@@ -284,10 +292,12 @@ let decode_json limits header =
                    "expected a nonnegative decimal integer token";
                let digit = Int64.of_int (Char.code c - 48) in
                if !value > Int64.div (Int64.sub Int64.max_int digit) 10L then
-                 abort meta Error.Invalid_integer "integer exceeds signed int64 range";
+                 abort meta Error.Invalid_integer
+                   "integer exceeds signed int64 range";
                value := Int64.add (Int64.mul !value 10L) digit
              done;
-             !value) ())
+             !value)
+           ())
     in
     expected ~dec_number:number ()
   in
@@ -305,9 +315,11 @@ let decode_json limits header =
   let dtype =
     let text =
       Jsont.Base.string
-        (Jsont.Base.map ~dec:(fun meta value ->
+        (Jsont.Base.map
+           ~dec:(fun meta value ->
              field meta "dtype";
-             Some { value; meta }) ())
+             Some { value; meta })
+           ())
     in
     expected ~dec_string:text ()
   in
@@ -315,7 +327,9 @@ let decode_json limits header =
     let array =
       Jsont.Array.array
         (Jsont.Array.map number
-           ~dec_empty:(fun () -> field Jsont.Meta.none name; [])
+           ~dec_empty:(fun () ->
+             field Jsont.Meta.none name;
+             [])
            ~dec_skip:(fun i _ ->
              if i >= max_length then
                abort Jsont.Meta.none excess (name ^ " array limit exceeded");
@@ -328,25 +342,31 @@ let decode_json limits header =
   let unknown = expected () in
   let fields =
     Jsont.Object.Mems.map unknown
-      ~dec_empty:(fun () -> fields_seen := Names.empty; ())
+      ~dec_empty:(fun () ->
+        fields_seen := Names.empty;
+        ())
       ~dec_add:(fun meta name _ () ->
         abort meta Error.Invalid_header ("unknown tensor field: " ^ name))
       ~dec_finish:(fun _ () -> ())
   in
   let tensor =
-    Jsont.Object.map'
-      (fun meta dtype shape offsets () -> { dtype; shape; offsets; meta })
+    Jsont.Object.map' (fun meta dtype shape offsets () ->
+        { dtype; shape; offsets; meta })
     |> Jsont.Object.mem "dtype" dtype ~dec_absent:None
     |> Jsont.Object.mem "shape"
          (integers "shape" limits.Limits.max_rank Error.Resource_limit)
          ~dec_absent:None
     |> Jsont.Object.mem "data_offsets"
-         (integers "data_offsets" 2 Error.Invalid_offsets) ~dec_absent:None
-    |> Jsont.Object.keep_unknown fields |> Jsont.Object.finish
+         (integers "data_offsets" 2 Error.Invalid_offsets)
+         ~dec_absent:None
+    |> Jsont.Object.keep_unknown fields
+    |> Jsont.Object.finish
   in
   let members ?(start = fun () -> ()) max_members value =
     Jsont.Object.Mems.map value
-      ~dec_empty:(fun () -> start (); (0, Names.empty))
+      ~dec_empty:(fun () ->
+        start ();
+        (0, Names.empty))
       ~dec_add:(fun meta name value (count, values) ->
         check_name meta name;
         if Names.mem name values then
@@ -371,7 +391,7 @@ let decode_json limits header =
               (expected ~dec_string:text ()))
       |> Jsont.Object.finish
       |> Jsont.map ~dec:(fun values ->
-           Names.fold (fun k v acc -> (k, v.value) :: acc) values [] |> List.rev)
+          Names.fold (fun k v acc -> (k, v.value) :: acc) values [] |> List.rev)
     in
     expected ~dec_object:object_ ()
   in
@@ -382,18 +402,27 @@ let decode_json limits header =
          (members limits.Limits.max_tensors (expected ~dec_object:tensor ()))
     |> Jsont.Object.finish
   in
-  match Jsont_bytesrw.decode_string' ~locs:true (expected ~dec_object:root ()) header with
+  match
+    Jsont_bytesrw.decode_string' ~locs:true
+      (expected ~dec_object:root ())
+      header
+  with
   | Ok root -> root
   | Error ((context, meta, _) as error) ->
       let path =
-        "$" ^ String.concat ""
-          (List.map (fun (_, index) -> match index with
-             | Jsont.Path.Mem (name, _) -> member_path name
-             | Jsont.Path.Nth (i, _) -> Printf.sprintf "[%d]" i) context)
+        "$"
+        ^ String.concat ""
+            (List.map
+               (fun (_, index) ->
+                 match index with
+                 | Jsont.Path.Mem (name, _) -> member_path name
+                 | Jsont.Path.Nth (i, _) -> Printf.sprintf "[%d]" i)
+               context)
       in
       let tensor =
         match context with
-        | (_, Jsont.Path.Mem (name, _)) :: _ when name <> "__metadata__" -> Some name
+        | (_, Jsont.Path.Mem (name, _)) :: _ when name <> "__metadata__" ->
+            Some name
         | _ -> None
       in
       let byte_offset =
@@ -402,7 +431,8 @@ let decode_json limits header =
         | None ->
             List.fold_left
               (fun found (_, index) ->
-                let meta = match index with
+                let meta =
+                  match index with
                   | Jsont.Path.Mem (_, m) | Jsont.Path.Nth (_, m) -> m
                 in
                 match location meta with None -> found | some -> some)
@@ -428,7 +458,13 @@ module Index = struct
     protect (fun () ->
         if String.length prefix <> 8 || file_size < 8L then
           fail Error.Truncated "expected an eight-byte prefix";
-        let n = String.get_int64_le prefix 0 in
+        let bits = ref 0L in
+        for i = 0 to 7 do
+          bits :=
+            Int64.logor !bits
+              (Int64.shift_left (Int64.of_int (Char.code prefix.[i])) (8 * i))
+        done;
+        let n = !bits in
         if n < 0L then
           fail Error.Invalid_integer
             "unsigned header length exceeds signed int64";
@@ -454,15 +490,28 @@ module Index = struct
           Names.mapi
             (fun name fields ->
               let bad ?field kind message =
-                let meta = match field with
-                  | Some "dtype" -> Option.fold ~none:fields.meta ~some:(fun (n : _ located) -> n.meta) fields.dtype
-                  | Some "shape" -> Option.fold ~none:fields.meta ~some:(fun (n : _ located) -> n.meta) fields.shape
-                  | Some "data_offsets" -> Option.fold ~none:fields.meta ~some:(fun (n : _ located) -> n.meta) fields.offsets
+                let meta =
+                  match field with
+                  | Some "dtype" ->
+                      Option.fold ~none:fields.meta
+                        ~some:(fun (n : _ located) -> n.meta)
+                        fields.dtype
+                  | Some "shape" ->
+                      Option.fold ~none:fields.meta
+                        ~some:(fun (n : _ located) -> n.meta)
+                        fields.shape
+                  | Some "data_offsets" ->
+                      Option.fold ~none:fields.meta
+                        ~some:(fun (n : _ located) -> n.meta)
+                        fields.offsets
                   | _ -> fields.meta
                 in
-                let path = "$" ^ member_path name ^
-                  Option.fold ~none:"" ~some:member_path field in
-                fail ~tensor:name ?byte_offset:(location meta) ~path kind message
+                let path =
+                  "$" ^ member_path name
+                  ^ Option.fold ~none:"" ~some:member_path field
+                in
+                fail ~tensor:name ?byte_offset:(location meta) ~path kind
+                  message
               in
               let required field = function
                 | Some n -> n.value
@@ -472,13 +521,16 @@ module Index = struct
                 let s = required "dtype" fields.dtype in
                 match Dtype.of_string s with
                 | Ok d -> d
-                | Error e -> bad ~field:"dtype" Error.Unsupported_dtype (Error.message e)
+                | Error e ->
+                    bad ~field:"dtype" Error.Unsupported_dtype (Error.message e)
               in
               let shape = required "shape" fields.shape in
               let begin_, end_ =
                 match required "data_offsets" fields.offsets with
                 | [ b; e ] -> (b, e)
-                | _ -> bad ~field:"data_offsets" Error.Invalid_offsets "expected two offsets"
+                | _ ->
+                    bad ~field:"data_offsets" Error.Invalid_offsets
+                      "expected two offsets"
               in
               if end_ < begin_ || end_ > payload_size then
                 bad ~field:"data_offsets" Error.Invalid_offsets
@@ -510,18 +562,23 @@ module Index = struct
           List.fold_left
             (fun cursor tensor ->
               let b, e = Tensor.data_offsets tensor in
-              if b <> cursor then (
-                let name = Tensor.name tensor in
-                let fields = Names.find name records in
-                let meta = Option.fold ~none:fields.meta ~some:(fun (n : _ located) -> n.meta) fields.offsets in
-                fail ~tensor:name ?byte_offset:(location meta)
-                  ~path:("$" ^ member_path name ^ member_path "data_offsets")
-                  Error.Invalid_offsets "payload ranges overlap or leave a gap");
+              (if b <> cursor then
+                 let name = Tensor.name tensor in
+                 let fields = Names.find name records in
+                 let meta =
+                   Option.fold ~none:fields.meta
+                     ~some:(fun (n : _ located) -> n.meta)
+                     fields.offsets
+                 in
+                 fail ~tensor:name ?byte_offset:(location meta)
+                   ~path:("$" ^ member_path name ^ member_path "data_offsets")
+                   Error.Invalid_offsets "payload ranges overlap or leave a gap");
               e)
             0L by_offset
         in
         if cursor <> payload_size then
-          fail ?byte_offset:(location root_meta) ~path:"$" Error.Size_mismatch "payload is not completely indexed";
+          fail ?byte_offset:(location root_meta) ~path:"$" Error.Size_mismatch
+            "payload is not completely indexed";
         { metadata; tensors; data_start })
 end
 
@@ -587,8 +644,9 @@ module Memory = struct
     match tensor_range t name with
     | Error e -> Error e
     | Ok (_, len) when len > Sys.max_string_length ->
-        Error (Error.make ~tensor:name Error.Resource_limit
-                 "tensor exceeds maximum bytes allocation; use tensor_view")
+        Error
+          (Error.make ~tensor:name Error.Resource_limit
+             "tensor exceeds maximum bytes allocation; use tensor_view")
     | Ok (start, len) -> (
         match t.payload with
         | String s ->

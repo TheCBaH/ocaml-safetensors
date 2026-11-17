@@ -28,10 +28,11 @@ let descriptor t =
   (Tensor.name t, Tensor.dtype t, Tensor.shape t, Tensor.data_offsets t)
 
 let check_index expected actual =
-  if Index.metadata expected <> Index.metadata actual
-     || Index.data_start expected <> Index.data_start actual
-     || List.map descriptor (Index.tensors expected)
-        <> List.map descriptor (Index.tensors actual)
+  if
+    Index.metadata expected <> Index.metadata actual
+    || Index.data_start expected <> Index.data_start actual
+    || List.map descriptor (Index.tensors expected)
+       <> List.map descriptor (Index.tensors actual)
   then failwith "reader index mismatch"
 
 let check_memory expected memory name =
@@ -78,7 +79,11 @@ let inspect path =
       | Ok memory, Ok big, Ok mapped, Ok reader ->
           let index = Memory.index memory in
           List.iter (check_index index)
-            [ Memory.index big; Memory.index mapped; Safetensors_unix.index reader ];
+            [
+              Memory.index big;
+              Memory.index mapped;
+              Safetensors_unix.index reader;
+            ];
           let metadata =
             Index.metadata index
             |> List.map (fun (k, v) -> quote k ^ ":" ^ quote v)
@@ -92,7 +97,9 @@ let inspect path =
               if i > 0 then print_char ',';
               let name = Tensor.name t in
               let bytes = get (Memory.copy_tensor memory name) in
-              List.iter (fun m -> check_memory bytes m name) [ memory; big; mapped ];
+              List.iter
+                (fun m -> check_memory bytes m name)
+                [ memory; big; mapped ];
               if get (Safetensors_unix.copy_tensor reader name) <> bytes then
                 failwith "file copy mismatch";
               let n = Bytes.length bytes in
@@ -114,7 +121,8 @@ let inspect path =
                 (quote name)
                 (quote (Dtype.to_string (Tensor.dtype t)))
                 (String.concat "," (List.map Int64.to_string (Tensor.shape t)))
-                b e (quote (hex bytes)))
+                b e
+                (quote (hex bytes)))
             (Index.tensors index);
           print_endline "]}"
       | _ -> failwith "four-reader acceptance mismatch")
