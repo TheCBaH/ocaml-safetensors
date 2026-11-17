@@ -76,6 +76,12 @@ let run () =
       ("BF16", 2);
       ("F32", 4);
       ("F64", 8);
+      ("F8_E5M2", 1);
+      ("F8_E4M3", 1);
+      ("F8_E8M0", 1);
+      ("F8_E4M3FNUZ", 1);
+      ("F8_E5M2FNUZ", 1);
+      ("C64", 8);
     ]
   in
   List.iter
@@ -136,7 +142,7 @@ let run () =
       ( "unknown",
         {|{"x":{"dtype":"U8","shape":[0],"data_offsets":[0,0],"extra":"x"}}|},
         Error.Invalid_header );
-      ("dtype", header (desc ~dtype:"F8_E4M3" ()), Error.Unsupported_dtype);
+      ("dtype", header (desc ~dtype:"F4" ()), Error.Unsupported_dtype);
       ( "root-dup",
         "{\"x\":" ^ tensor_json ^ ",\"x\":" ^ tensor_json ^ "}",
         Error.Duplicate_member );
@@ -238,7 +244,7 @@ let run () =
       assert (Error.byte_offset e <> None)
   | _ -> assert false);
   Printf.printf
-    "core: 13 dtypes, exact int64, %d malformed cases, layout and limits\n"
+    "core: 19 dtypes, exact int64, %d malformed cases, layout and limits\n"
     (List.length bad_headers)
 
 let fixtures read =

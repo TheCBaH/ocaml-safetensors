@@ -64,6 +64,12 @@ module Dtype : sig
     | BF16
     | F32
     | F64
+    | F8_E5M2
+    | F8_E4M3
+    | F8_E8M0
+    | F8_E4M3FNUZ
+    | F8_E5M2FNUZ
+    | C64
 
   val of_string : string -> (t, Error.t) result
   val to_string : t -> string

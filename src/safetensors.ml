@@ -131,6 +131,12 @@ module Dtype = struct
     | BF16
     | F32
     | F64
+    | F8_E5M2
+    | F8_E4M3
+    | F8_E8M0
+    | F8_E4M3FNUZ
+    | F8_E5M2FNUZ
+    | C64
 
   let all =
     [
@@ -147,20 +153,26 @@ module Dtype = struct
       ("BF16", BF16);
       ("F32", F32);
       ("F64", F64);
+      ("F8_E5M2", F8_E5M2);
+      ("F8_E4M3", F8_E4M3);
+      ("F8_E8M0", F8_E8M0);
+      ("F8_E4M3FNUZ", F8_E4M3FNUZ);
+      ("F8_E5M2FNUZ", F8_E5M2FNUZ);
+      ("C64", C64);
     ]
 
   let of_string s =
     match List.assoc_opt s all with
     | Some d -> Ok d
-    | None -> Error (Error.make Error.Unsupported_dtype s)
+    | None -> Error (Error.make Error.Unsupported_dtype ("unsupported dtype: " ^ s))
 
   let to_string d = fst (List.find (fun (_, v) -> v = d) all)
 
   let byte_width = function
-    | Bool | U8 | I8 -> 1
+    | Bool | U8 | I8 | F8_E5M2 | F8_E4M3 | F8_E8M0 | F8_E4M3FNUZ | F8_E5M2FNUZ -> 1
     | U16 | I16 | F16 | BF16 -> 2
     | U32 | I32 | F32 -> 4
-    | U64 | I64 | F64 -> 8
+    | U64 | I64 | F64 | C64 -> 8
 end
 
 module Tensor = struct
