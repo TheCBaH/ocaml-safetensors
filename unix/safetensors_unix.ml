@@ -21,7 +21,7 @@ let close t =
     t.closed <- true;
     Unix.close t.fd)
 
-let open_file ?limits path =
+let acquire path f =
   io (fun () ->
       let fd =
         Unix.openfile path [ Unix.O_RDONLY; Unix.O_CLOEXEC; Unix.O_NONBLOCK ] 0
@@ -29,34 +29,42 @@ let open_file ?limits path =
       let keep = ref false in
       Fun.protect
         ~finally:(fun () -> if not !keep then Unix.close fd)
-        (fun () ->
-          let stat = Unix.LargeFile.fstat fd in
-          if stat.Unix.LargeFile.st_kind <> Unix.S_REG then
-            Error (Error.make Error.Invalid_argument "expected a regular file")
-          else
-            let prefix = Bytes.create 8 in
-            match read_exact fd prefix 0 8 with
-            | Error e -> Error e
-            | Ok () -> (
-                let file_size = stat.Unix.LargeFile.st_size in
-                match
-                  Index.header_length ?limits ~file_size
-                    (Bytes.to_string prefix)
-                with
-                | Error e -> Error e
-                | Ok n -> (
-                    let header = Bytes.create n in
-                    match read_exact fd header 0 n with
-                    | Error e -> Error e
-                    | Ok () -> (
-                        match
-                          Index.decode_header ?limits ~file_size
-                            (Bytes.to_string header)
-                        with
-                        | Error e -> Error e
-                        | Ok index ->
-                            keep := true;
-                            Ok { fd; index; closed = false })))))
+        (fun () -> f fd keep))
+
+let preflight ?limits fd =
+  let stat = Unix.LargeFile.fstat fd in
+  if stat.Unix.LargeFile.st_kind <> Unix.S_REG then
+    Error (Error.make Error.Invalid_argument "expected a regular file")
+  else
+    let prefix = Bytes.create 8 in
+    match read_exact fd prefix 0 8 with
+    | Error e -> Error e
+    | Ok () -> (
+        let file_size = stat.Unix.LargeFile.st_size in
+        match
+          Index.header_length ?limits ~file_size (Bytes.unsafe_to_string prefix)
+        with
+        | Error e -> Error e
+        | Ok n -> Ok (file_size, n))
+
+let open_file ?limits path =
+  acquire path (fun fd keep ->
+      match preflight ?limits fd with
+      | Error e -> Error e
+      | Ok (file_size, n) -> (
+          let header = Bytes.create n in
+          match read_exact fd header 0 n with
+          | Error e -> Error e
+          | Ok () -> (
+              (* The owned buffer is never mutated after this transfer. *)
+              match
+                Index.decode_header ?limits ~file_size
+                  (Bytes.unsafe_to_string header)
+              with
+              | Error e -> Error e
+              | Ok index ->
+                  keep := true;
+                  Ok { fd; index; closed = false })))
 
 let read_into t name ~tensor_offset dst ~dst_off ~len =
   io (fun () ->
@@ -70,7 +78,7 @@ let read_into t name ~tensor_offset dst ~dst_off ~len =
         | None ->
             Error
               (Error.make ~tensor:name Error.Missing_tensor "tensor not found")
-        | Some tensor ->
+        | Some tensor -> (
             let length = Tensor.byte_length tensor in
             if
               tensor_offset < 0L || tensor_offset > length
@@ -86,8 +94,16 @@ let read_into t name ~tensor_offset dst ~dst_off ~len =
                 Int64.add (Index.data_start t.index)
                   (Int64.add begin_ tensor_offset)
               in
-              ignore (Unix.LargeFile.lseek t.fd absolute Unix.SEEK_SET);
-              read_exact t.fd dst dst_off len)
+              match
+                io (fun () ->
+                    ignore (Unix.LargeFile.lseek t.fd absolute Unix.SEEK_SET);
+                    read_exact t.fd dst dst_off len)
+              with
+              | Ok () -> Ok ()
+              | Error e ->
+                  Error
+                    (Error.make ~tensor:name ~byte_offset:absolute
+                       ?path:(Error.path e) (Error.kind e) (Error.message e))))
 
 let copy_tensor t name =
   if t.closed then Error (Error.make Error.Closed "reader is closed")
@@ -117,23 +133,19 @@ let with_file ?limits path f =
 
 module Mmap = struct
   let open_file ?limits path =
-    match open_file ?limits path with
-    | Error e -> Error e
-    | Ok t ->
-        Fun.protect
-          ~finally:(fun () -> close t)
-          (fun () ->
-            io (fun () ->
-                let size = (Unix.LargeFile.fstat t.fd).Unix.LargeFile.st_size in
-                if size > Int64.of_int max_int then
-                  Error
-                    (Error.make Error.Resource_limit
-                       "file is too large to map on this platform")
-                else
-                  let mapped =
-                    Bigarray.array1_of_genarray
-                      (Unix.map_file t.fd Bigarray.Char Bigarray.c_layout false
-                         [| Int64.to_int size |])
-                  in
-                  Memory.of_bigstring ?limits mapped))
+    acquire path (fun fd _keep ->
+        match preflight ?limits fd with
+        | Error e -> Error e
+        | Ok (size, _) ->
+            if size > Int64.of_int max_int then
+              Error
+                (Error.make Error.Resource_limit
+                   "file is too large to map on this platform")
+            else
+              let mapped =
+                Bigarray.array1_of_genarray
+                  (Unix.map_file fd Bigarray.Char Bigarray.c_layout false
+                     [| Int64.to_int size |])
+              in
+              Memory.of_bigstring ?limits mapped)
 end

@@ -62,6 +62,27 @@ let () =
           Unix.stdin b 0 1);
      assert false
    with Unix.Unix_error (Unix.EIO, _, _) -> ());
+  List.iter
+    (fun terminal ->
+      let calls = ref 0 in
+      let dst = Bytes.make 8 '-' in
+      let read _ buffer offset _length =
+        incr calls;
+        if !calls = 1 then (
+          Bytes.blit_string "ab" 0 buffer offset 2;
+          2)
+        else terminal ()
+      in
+      (try
+         let result = Safetensors_io.read_exact ~read Unix.stdin dst 2 4 in
+         expect Error.Truncated result
+       with Unix.Unix_error (Unix.EIO, _, _) -> ());
+      assert (!calls = 2);
+      assert (Bytes.to_string dst = "--ab----"))
+    [
+      (fun () -> 0);
+      (fun () -> raise (Unix.Unix_error (Unix.EIO, "read", "injected")));
+    ];
   with_temp sample (fun path ->
       let r = get (Safetensors_unix.open_file path) in
       let ix = Safetensors_unix.index r in
@@ -85,7 +106,12 @@ let () =
            ~len:max_int);
       expect Error.Missing_tensor (Safetensors_unix.copy_tensor r "missing");
       Unix.truncate path (String.length sample - 2);
-      expect Error.Truncated (Safetensors_unix.copy_tensor r "x");
+      (match Safetensors_unix.copy_tensor r "x" with
+      | Error e ->
+          assert (Error.kind e = Error.Truncated);
+          assert (Error.tensor e = Some "x");
+          assert (Error.byte_offset e = Some (Index.data_start ix))
+      | Ok _ -> failwith "truncated tensor accepted");
       Safetensors_unix.close r;
       Safetensors_unix.close r;
       expect Error.Closed (Safetensors_unix.copy_tensor r "x");
@@ -157,7 +183,8 @@ let check tensors =
                  expect Error.Missing_tensor (Memory.copy_tensor m "missing");
                  expect Error.Missing_tensor (Memory.tensor_view m "missing"))
                [ mem; big; mapped ];
-             expect Error.Missing_tensor (Safetensors_unix.copy_tensor f "missing");
+             expect Error.Missing_tensor
+               (Safetensors_unix.copy_tensor f "missing");
              List.iter
                (fun t ->
                  List.iter
@@ -170,7 +197,9 @@ let check tensors =
                        (fun i c -> assert (Bigarray.Array1.get view i = c))
                        t.data;
                      Bytes.fill copy 0 (Bytes.length copy) 'Q';
-                     assert (Bytes.to_string (get (Memory.copy_tensor m t.name)) = t.data))
+                     assert (
+                       Bytes.to_string (get (Memory.copy_tensor m t.name))
+                       = t.data))
                    [ mem; big; mapped ];
                  assert (
                    Bytes.to_string (get (Safetensors_unix.copy_tensor f t.name))
@@ -248,50 +277,53 @@ let () =
             data = String.init n (fun _ -> Char.chr (Random.State.int rng 256));
           })
     in
-    (try check tensors
-     with e ->
-       let signature = Printexc.to_string e in
-       let fails ts =
-         try
-           check ts;
-           false
-         with error -> Printexc.to_string error = signature
-       in
-       let rec remove_nth n = function
-         | [] -> []
-         | _ :: rest when n = 0 -> rest
-         | item :: rest -> item :: remove_nth (n - 1) rest
-       in
-       let rec shrink ts =
-         let rec candidate i =
-           if i >= List.length ts then ts
-           else
-             let smaller = remove_nth i ts in
-             if smaller <> [] && fails smaller then shrink smaller
-             else candidate (i + 1)
-         in
-         candidate 0
-       in
-       let path =
-         match Sys.getenv_opt "SAFETENSORS_FAILURE_FILE" with
-         | Some p -> p
-         | None -> "property-failure.safetensors"
-       in
-       let save path bytes =
-         let out = open_out_bin path in
-         Fun.protect ~finally:(fun () -> close_out out)
-           (fun () -> output_string out bytes)
-       in
-       save path (render tensors);
-       save (path ^ ".min.safetensors") (render (shrink tensors));
-       save (path ^ ".replay")
-         (Printf.sprintf "seed=%d\ncase=%d\nocaml=%s\nfailure=%s\n" seed case
-            Sys.ocaml_version signature);
-       failwith
-         (Printf.sprintf "seed=%d case=%d regression=%s: %s" seed case path signature))
+    try check tensors
+    with e ->
+      let signature = Printexc.to_string e in
+      let fails ts =
+        try
+          check ts;
+          false
+        with error -> Printexc.to_string error = signature
+      in
+      let rec remove_nth n = function
+        | [] -> []
+        | _ :: rest when n = 0 -> rest
+        | item :: rest -> item :: remove_nth (n - 1) rest
+      in
+      let rec shrink ts =
+        let rec candidate i =
+          if i >= List.length ts then ts
+          else
+            let smaller = remove_nth i ts in
+            if smaller <> [] && fails smaller then shrink smaller
+            else candidate (i + 1)
+        in
+        candidate 0
+      in
+      let path =
+        match Sys.getenv_opt "SAFETENSORS_FAILURE_FILE" with
+        | Some p -> p
+        | None -> "property-failure.safetensors"
+      in
+      let save path bytes =
+        let out = open_out_bin path in
+        Fun.protect
+          ~finally:(fun () -> close_out out)
+          (fun () -> output_string out bytes)
+      in
+      save path (render tensors);
+      save (path ^ ".min.safetensors") (render (shrink tensors));
+      save (path ^ ".replay")
+        (Printf.sprintf "seed=%d\ncase=%d\nocaml=%s\nfailure=%s\n" seed case
+           Sys.ocaml_version signature);
+      failwith
+        (Printf.sprintf "seed=%d case=%d regression=%s: %s" seed case path
+           signature)
   done;
   Printf.printf
-    "properties: seed=%d cases=%d, four-reader byte parity (differential mutations in offline oracle suite)\n"
+    "properties: seed=%d cases=%d, four-reader byte parity (differential \
+     mutations in offline oracle suite)\n"
     seed cases
 
 let () =
