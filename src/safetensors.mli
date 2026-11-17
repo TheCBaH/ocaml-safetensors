@@ -27,6 +27,9 @@ module Error : sig
   val tensor : t -> string option
   val byte_offset : t -> int64 option
   val path : t -> string option
+  val json_path : t -> string option
+  (** JSON-escaped member/index path; [path] is a compatibility alias. *)
+
   val kind_name : kind -> string
   val pp : Format.formatter -> t -> unit
 end
@@ -42,11 +45,14 @@ module Limits : sig
     ?max_rank:int ->
     ?max_name_bytes:int ->
     ?max_metadata_entries:int ->
-    ?max_depth:int ->
     unit ->
     (t, Error.t) result
 
   val max_header_bytes : t -> int
+  val max_tensors : t -> int
+  val max_rank : t -> int
+  val max_name_bytes : t -> int
+  val max_metadata_entries : t -> int
 end
 
 module Dtype : sig

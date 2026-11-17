@@ -221,6 +221,12 @@ let () =
       ("BF16", 2);
       ("F32", 4);
       ("F64", 8);
+      ("F8_E5M2", 1);
+      ("F8_E4M3", 1);
+      ("F8_E8M0", 1);
+      ("F8_E4M3FNUZ", 1);
+      ("F8_E5M2FNUZ", 1);
+      ("C64", 8);
     |]
   in
   for case = 1 to cases do
@@ -244,41 +250,48 @@ let () =
     in
     (try check tensors
      with e ->
+       let signature = Printexc.to_string e in
        let fails ts =
          try
            check ts;
            false
-         with _ -> true
+         with error -> Printexc.to_string error = signature
+       in
+       let rec remove_nth n = function
+         | [] -> []
+         | _ :: rest when n = 0 -> rest
+         | item :: rest -> item :: remove_nth (n - 1) rest
        in
        let rec shrink ts =
-         match ts with
-         | _ :: (_ :: _ as tail) when fails tail -> shrink tail
-         | _ -> ts
+         let rec candidate i =
+           if i >= List.length ts then ts
+           else
+             let smaller = remove_nth i ts in
+             if smaller <> [] && fails smaller then shrink smaller
+             else candidate (i + 1)
+         in
+         candidate 0
        in
-       let small = render (shrink tensors) in
        let path =
          match Sys.getenv_opt "SAFETENSORS_FAILURE_FILE" with
          | Some p -> p
          | None -> "property-failure.safetensors"
        in
-       let out = open_out_bin path in
-       output_string out small;
-       close_out out;
+       let save path bytes =
+         let out = open_out_bin path in
+         Fun.protect ~finally:(fun () -> close_out out)
+           (fun () -> output_string out bytes)
+       in
+       save path (render tensors);
+       save (path ^ ".min.safetensors") (render (shrink tensors));
+       save (path ^ ".replay")
+         (Printf.sprintf "seed=%d\ncase=%d\nocaml=%s\nfailure=%s\n" seed case
+            Sys.ocaml_version signature);
        failwith
-         (Printf.sprintf "seed=%d case=%d regression=%s: %s" seed case path
-            (Printexc.to_string e)));
-    let random =
-      String.init (Random.State.int rng 512) (fun _ ->
-          Char.chr (Random.State.int rng 256))
-    in
-    ignore (Memory.of_string random);
-    let mutated = Bytes.of_string (render tensors) in
-    let i = Random.State.int rng (Bytes.length mutated) in
-    Bytes.set mutated i (Char.chr (Random.State.int rng 256));
-    ignore (Memory.of_string (Bytes.to_string mutated))
+         (Printf.sprintf "seed=%d case=%d regression=%s: %s" seed case path signature))
   done;
   Printf.printf
-    "properties: seed=%d cases=%d, byte parity and malformed-input mutations\n"
+    "properties: seed=%d cases=%d, four-reader byte parity (differential mutations in offline oracle suite)\n"
     seed cases
 
 let () =
