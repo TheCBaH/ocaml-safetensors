@@ -12,7 +12,7 @@ Two separately installable packages:
 | Package / Dune library | OCaml module | Purpose |
 | --- | --- | --- |
 | `safetensors` | `Safetensors` | Header/index validation and memory reader; no Unix dependency. |
-| `safetensors-unix` | `Safetensors_unix` | Owned Unix file handles, selected copies and bounded chunked reads. |
+| `safetensors-unix` | `Safetensors_unix` | Owned Unix file handles, bounded chunked reads and private file mappings. |
 
 ## Build and use
 
@@ -47,12 +47,58 @@ let print_tensors path =
 For a large tensor, use `read_into reader name ~tensor_offset buffer ~dst_off
 ~len`; offsets within tensors are int64. `with_file` closes the handle even
 when its callback raises. Explicit `close` is idempotent; subsequent reads
-return `Closed`. A handle's operations must be serialized, and its underlying
-file must remain unchanged until it is closed. Copied bytes and index metadata
-remain valid afterward. There is no mmap or implicit tensor conversion.
+return `Closed`. A handle's operations must be serialized: reads seek and use
+the same descriptor position. On EOF or I/O failure, `read_into` may already
+have changed part of the requested destination range; it does not roll back.
+Copied bytes and index metadata remain valid after closing.
 
 `Safetensors.Memory.of_string` validates an immutable complete file already in
-memory. `Index.decode_header ~file_size` accepts only the header string and the
+memory and retains it. `Memory.of_bigstring` retains the supplied bigarray
+without copying the payload. `Memory.tensor_view` returns an alias for a
+bigstring-backed reader, but allocates a fresh bigarray for a string-backed
+reader. `Memory.copy_tensor` always returns independent mutable bytes.
+
+For example, these functions use only installed public libraries; link
+`safetensors` for the first two, and `safetensors-unix` for file mapping:
+
+```ocaml
+let ( let* ) = Result.bind
+
+let copy_from_string file name =
+  let* reader = Safetensors.Memory.of_string file in
+  Safetensors.Memory.copy_tensor reader name
+
+let view_from_bigstring backing name =
+  let* reader = Safetensors.Memory.of_bigstring backing in
+  Safetensors.Memory.tensor_view reader name
+
+let view_from_file path name =
+  let* reader = Safetensors_unix.Mmap.open_file path in
+  Safetensors.Memory.tensor_view reader name
+```
+
+Keep borrowed bigstrings and their views unmodified while a reader or view is
+in use. The bigarray type permits writes; it does not enforce this contract.
+The memory reader and each alias keep the underlying storage alive, so a view
+survives dropping the reader and garbage collection. Keeping even a small
+alias may retain an entire large buffer or mapping.
+
+`Mmap.open_file` maps the whole regular file privately with writable
+copy-on-write pages. Writes through a view violate the reader contract: they
+can affect other views of the same mapping, although they do not write back to
+the file. The descriptor is closed before `open_file` returns. There is no
+explicit unmap operation; the GC eventually releases the mapping after its
+reader and all views become unreachable.
+
+Both Unix readers require the underlying file to remain unchanged for their
+whole lifetime, including the lifetime of mapped views. Neither supplies a
+snapshot of a changing file. Truncating a mapped file can cause a fatal
+`SIGBUS` when its pages are accessed, rather than a structured error. The
+descriptor reader can return `Truncated` on EOF, but a rewrite may still yield
+new bytes under stale metadata. Use immutable published files, synchronization,
+or an independently acquired stable copy when consistency is required.
+
+`Index.decode_header ~file_size` accepts only the header string and the
 known total file size; `Index.header_length` validates the eight-byte prefix
 before an application allocates that string. Header-only validation cannot
 prove payload availability or authenticate file contents.
@@ -63,7 +109,9 @@ See [core interface](src/safetensors.mli) and
 ## Format behavior
 
 Supported types: `BOOL`, `U8`, `I8`, `U16`, `I16`, `U32`, `I32`, `U64`, `I64`,
-`F16`, `BF16`, `F32`, `F64`. Shapes and offsets use exact nonnegative int64
+`F16`, `BF16`, `F32`, `F64`, `F8_E5M2`, `F8_E4M3`, `F8_E8M0`,
+`F8_E4M3FNUZ`, `F8_E5M2FNUZ`, `C64`. Packed `F4`, `F6_E2M3` and `F6_E3M2`
+are not supported. Shapes and offsets use exact nonnegative int64
 values; JSON numeric tokens never pass through a lossy float-to-int conversion.
 Scalars, zero-element tensors, arbitrary tensor names, and string metadata are
 supported. Numeric values, including NaNs, infinities and boolean bit patterns,
@@ -75,31 +123,42 @@ and complete payload coverage. JSON whitespace may surround the header object.
 Unknown tensor-record fields and unsupported dtypes are errors. Decimal integer
 tokens must not contain fractions, exponents, signs, or string encodings.
 
-`Error.t` exposes a stable kind, message, and available tensor/path/file-byte
-context. Format and I/O failures return results; process resource exhaustion
+`Error.t` exposes a machine-readable kind and available tensor/JSON-path/file-byte
+context. `Error.json_path` and `Error.path` access the same JSON path; the latter
+is retained for compatibility. Messages and `Error.pp` are presentation text,
+including upstream decoder diagnostics, and may vary with dependency versions.
+Format and I/O failures return results; process resource exhaustion
 and exceptions raised by application callbacks are not converted to results.
 See [compatibility](docs/compatibility.md) for deliberate differences from the
 reference implementation.
 
 Default configurable limits are 100,000,000 header bytes, 100,000 tensors,
-rank 64, 4,096 bytes per decoded JSON member name, 100,000 user-metadata entries,
-and depth 16. The fixed decoding schema itself accepts at most three nested
-containers. Builders reject excess members/elements during decoding; the
-header-size cap bounds individual strings and decoder memory. A valid large
-header can require several times its encoded size in memory. Reduce limits for
+rank 64, 4,096 bytes per decoded JSON member name, and 100,000 user-metadata
+entries. There is no configurable depth limit: the strict fixed schema accepts
+at most three nested containers and rejects unexpected value sorts. Builders
+reject excess members/elements during decoding; the header-size cap bounds
+individual strings and decoder memory. A valid large header can require
+several times its encoded size in memory. Reduce limits for
 untrusted workloads. Copying one tensor is additionally bounded by OCaml's
 maximum bytes allocation; chunked reads avoid that allocation limit.
 
 ## Verification
 
-`make runtest` is offline and uses only OCaml plus 1.6 KB of project-owned
+`make runtest` is offline and uses only OCaml plus small project-owned
 fixtures. It exercises all supported dtypes, exact integers, malformed files,
-limits, short reads/EINTR, handle cleanup, an 8 GiB sparse file, and 1,000 seeded
+limits, short reads/EINTR, handle cleanup and 1,000 seeded
 byte-parity/property cases. `make test.stress` raises that budget to 10,000;
 `SAFETENSORS_SEED` selects a replay seed. A failing generated case is reduced
-by removing tensors and saved to `SAFETENSORS_FAILURE_FILE` (default
-`property-failure.safetensors`). Arbitrary-byte and mutated-file cases must
-also return without unexpected exceptions.
+by removing arbitrary tensors and saved to `SAFETENSORS_FAILURE_FILE` (default
+`property-failure.safetensors`), with a minimized file and replay details.
+
+Large sparse-file checks run separately with `make test.large-file`. They
+probe selected bytes beyond 2 GiB without copying the complete tensor, and check sparse-file support and
+disk budget first. Unsupported environments report an explicit skip; ordinary
+`runtest` and `opam install --with-test` do not create an 8 GiB file.
+`make test.copy-limit-32` checks the copy-allocation guard only when run by a
+true 32-bit OCaml runtime; another runtime reports a skip rather than proving
+32-bit support.
 
 External conformance uses the upstream Rust-backed `safetensors.deserialize`
 API; Torch and model inference are not involved. On Linux x86-64 or aarch64,
@@ -114,10 +173,18 @@ make fixtures.fetch
 make test.hub
 ```
 
+The synthetic suite also runs seeded differential valid, arbitrary-byte and
+targeted header mutations. `SAFETENSORS_FUZZ_CASES` controls its case budget
+(default 100), and `SAFETENSORS_SEED` controls replay. Unexpected exceptions,
+oracle disagreements and byte/descriptor mismatches save original and
+predicate-preserving minimized files in `.cache/reports/failures/`, alongside
+JSON replay details including seed, case, mutation location, limits and versions.
+
 The Hub lock selects six files totaling **3,114,833 bytes and 307 tensors**.
 Every tensor's bytes, dtype, shape, name, and metadata are compared through
-memory, full-copy, and chunked access. The lock's discovery flags describe the
-2026-09-29 investigation; execution evidence is written separately to
+string and bigstring memory readers, descriptor copies/chunks and mapped views.
+The lock's discovery flags describe the 2026-09-29 investigation; execution
+evidence is written separately to
 `.cache/reports/`. Downloads are bounded, revision-pinned and hash-checked on
 fresh and cached reads. No model code or tokenizer is downloaded or executed.
 The independently generated binary fixtures stay in Git; HF binaries do not.
@@ -129,16 +196,19 @@ on completion. CI executes the clients and conformance suite in isolated network
 namespaces; runtime clients receive an empty environment with no Python/Rust
 executable on `PATH`. The reference job and installation job are separate.
 
-CI covers Linux x86-64 with OCaml 4.14.3/Jsont 0.2.0 and OCaml 5.3.0/Jsont 0.4.0,
-plus the shared devcontainer. Local development also verifies Linux aarch64
-with OCaml 4.14.3. Other platforms are not yet claimed as tested.
+The pinned native CI matrix uses Linux x86-64 with OCaml 4.14.3/Jsont 0.2.0
+and OCaml 5.3.0/Jsont 0.4.0 through the repository's devcontainers. Additional
+jobs resolve current dependencies and exercise the copy bound on a true 32-bit
+OCaml runtime, retaining package/compiler reports. Local development has also
+used Linux aarch64 with OCaml 4.14.3. Other platforms are not yet claimed as tested.
 
 ## Project scope
 
 This release contains a standalone format reader. `mltorch` integration,
-producer sidecars, downloads in the library, casts, serialization, shard-index
-resolution, mmap, typed views, GPU access and JS/browser bindings are outside
-scope. Future integrations need their own plan.
+producer sidecars, downloads in the library, numerical casts and typed tensor
+decoding, serialization, shard-index resolution and GPU access are outside
+scope. Raw bigstring views, private mmap and the optional JavaScript adapters
+are included. See [design](docs/design.md) for validation and ownership rationale.
 
 [Fixture lock](ocaml-safetensors-fixtures.json)
 
