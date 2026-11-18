@@ -51,6 +51,9 @@ jobs:
       - name: Independent conformance without networking
         if: matrix.ocaml == '4.14.3'
         run: ${{ steps.container.outputs.exec }} make test.native.offline
+      - name: Sparse large-file coverage
+        if: matrix.ocaml == '4.14.3'
+        run: ${{ steps.container.outputs.exec }} env SAFETENSORS_REQUIRE_LARGE_FILE=1 make test.large-file
       - name: Fresh standalone installation
         if: matrix.ocaml == '4.14.3'
         run: ${{ steps.container.outputs.exec }} env SAFETENSORS_REQUIRE_NETNS=1 make test.standalone
@@ -77,7 +80,7 @@ jobs:
           username: ${{ github.actor }}
           password: ''
       - name: Prepare compilers, browser and verified corpus
-        run: ${{ steps.container.outputs.exec }} make js.deps js.reference js.build.jsoo js.build.melange js.corpus
+        run: ${{ steps.container.outputs.exec }} make -j4 js.prepare
       - name: Standalone Node, browser and installed clients
         run: ${{ steps.container.outputs.exec }} make test.javascript.offline
       - name: Store JavaScript evidence
@@ -89,3 +92,64 @@ jobs:
           if-no-files-found: warn
       - name: Verify generated files
         run: make tree.check
+  latest:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/devel')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.3.0'
+          opam-pin: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Resolve current unconstrained dependencies
+        run: |
+          opam update
+          opam install . --deps-only --with-test --yes
+          opam upgrade --yes
+          mkdir -p .cache/reports
+          opam list --installed --columns=name,version > .cache/reports/latest-packages.txt
+          opam pin list > .cache/reports/latest-pins.txt
+      - name: Build, test and compare current dependencies
+        run: make build runtest js.reference fixtures.fetch PYTHON=.venv/bin/python test.interop test.hub
+      - name: Store latest resolver evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-dependencies
+          path: .cache/reports/
+          if-no-files-found: warn
+      - name: Verify generated files
+        run: make tree.check
+  native-32:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install 32-bit compiler prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes gcc-multilib
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 'ocaml-variants.4.14.3+options,ocaml-option-32bit'
+          opam-pin: false
+      - name: Build native 32-bit packages
+        run: |
+          opam install --yes dune.3.17.2 jsont.0.2.0 bytesrw.0.2.0
+          make build runtest
+      - name: Check allocation limit on a real 32-bit runtime
+        run: |
+          mkdir -p .cache/reports
+          test "$(opam exec -- ocamlc -config-var word_size)" = 32
+          opam exec -- ocamlc -config > .cache/reports/32bit-compiler.txt
+          opam list --installed --columns=name,version > .cache/reports/32bit-packages.txt
+          SAFETENSORS_REQUIRE_LARGE_FILE=1 make test.copy-limit-32 2>&1 | tee .cache/reports/32bit-copy.txt
+      - name: Store 32-bit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-32
+          path: .cache/reports/
+          if-no-files-found: warn
