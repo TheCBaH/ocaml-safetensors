@@ -458,13 +458,7 @@ module Index = struct
     protect (fun () ->
         if String.length prefix <> 8 || file_size < 8L then
           fail Error.Truncated "expected an eight-byte prefix";
-        let bits = ref 0L in
-        for i = 0 to 7 do
-          bits :=
-            Int64.logor !bits
-              (Int64.shift_left (Int64.of_int (Char.code prefix.[i])) (8 * i))
-        done;
-        let n = !bits in
+        let n = Header_prefix.decode prefix in
         if n < 0L then
           fail Error.Invalid_integer
             "unsigned header length exceeds signed int64";

@@ -1,4 +1,5 @@
 (library
  (name safetensors)
  (public_name safetensors)
+ (private_modules header_prefix)
  (libraries jsont jsont.bytesrw))

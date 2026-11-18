@@ -14,11 +14,18 @@ js_of_ocaml 6.4.1, Melange 7.0.1-414 and Node 24.19.0. JavaScript development
 dependencies and Chromium are locked through `javascript/package-lock.json`.
 
 ```sh
-make js.submodules
-make js.deps js.reference
-make js.build.jsoo js.build.melange js.corpus
+make -j4 js.prepare
 make test.javascript.offline
 ```
+
+`js.prepare` completes dependencies, the native package, both backend builds
+and the corpus before recording prepared artifacts. It may fetch dependencies
+and fixtures. `test.javascript` performs preparation before the run/install
+phase and supports parallel Make. Direct `test.javascript.run`,
+`test.javascript.offline` and `test.js.install` check that prepared inputs and
+artifacts are current; missing or stale preparation fails with an instruction
+to run `make js.prepare`, without downloads or project regeneration. Build and
+installation scripts serialize access to each generated compiler project.
 
 The build targets assemble independent dune projects below
 `.cache/javascript/{jsoo,melange}`. `make test.js.install` installs each package
@@ -65,8 +72,16 @@ impose a substantially smaller ceiling. Allocation failures are runtime
 exceptions, as with the native memory API. Caller-supplied limits bound header
 parsing. Fetch, File/Blob, Node filesystem access and zero-copy numerical
 views are outside this initial API.
+Both backends generate their typed-array validator binding from the shared
+`javascript/shared/validate_uint8array.js` source; ownership remains the same.
 
 ## Melange dependency port and Bigarray
+
+Header prefix decoding uses a private backend-specific module. Native and
+js_of_ocaml use `String.get_int64_le`; Melange assembles the eight bytes
+explicitly because the pinned 7.0.1 runtime decodes them incorrectly. Upstream
+[PR #2029](https://github.com/melange-re/melange/pull/2029) fixes this in
+development sources, but the fix is not yet released.
 
 The build fetches hash-locked upstream Jsont and bytesrw releases and compiles
 all their core/codec source. It never substitutes JSON.parse or an abbreviated
@@ -81,8 +96,8 @@ are applied by an explicit patch with zero fuzz:
   The original extensible-variant equality witness stays intact.
 
 The Melange build uses the independently installed
-[melange-bigarray](https://github.com/TheCBaH/melange-bigarray) package at
-`596676e56e45d14aefe3746df5a8931a58387442`. The Git submodule at `vendor/melange-bigarray` is pinned by the repository's
+[melange-bigarray](https://github.com/TheCBaH/melange-bigarray) package. The Git
+submodule at `vendor/melange-bigarray` is pinned by the repository's
 Git entry; `.gitmodules` records the upstream URL. Clone with
 `git clone --recurse-submodules`, or run `make js.submodules` in an existing
 checkout. The JavaScript devcontainer initializes it through the named
@@ -117,14 +132,14 @@ recursive Jsont initialization; the verified build requires Melange 7.
 
 `make js.corpus` prepares expectations with the native reader and pinned
 safetensors 0.8.0 reference before offline JavaScript execution. Both backends
-run the same 33 malformed core cases, all 13 dtypes, exact arithmetic, Unicode,
+run the shared malformed core cases, all supported dtypes, exact arithmetic, Unicode,
 layout/limit checks and five embedded fixtures without filesystem access.
 The shared runner then compares all names, metadata, decimal shapes/offsets,
 error kinds/paths/byte offsets and every tensor byte across:
 
 - Five synthetic files (18 tensors) and six immutable Hugging Face files
   (307 tensors, 3,114,833 bytes).
-- All 26 upstream acceptance probes, preserving documented policy differences.
+- The upstream acceptance and dtype probes, preserving documented policy differences.
 - Eight empty-tensor shape cases at 2^31, 2^32, 2^53 and signed-int64 boundaries.
 - All 256 raw byte values, Unicode names, subviews, independent input/output
   ownership, Node Buffers, cross-realm Uint8Arrays and invalid buffers.

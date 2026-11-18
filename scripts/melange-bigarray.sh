@@ -3,6 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
 work=$root/.cache/javascript/bigarray
+mkdir -p "$root/.cache/javascript"
+exec 9>"$root/.cache/javascript/melange.lock"
+flock 9
 source=$root/vendor/melange-bigarray
 prefix=$work/installed
 pin=$(git ls-files --stage -- vendor/melange-bigarray | awk '$1 == "160000" && $3 == "0" {print $2}')
