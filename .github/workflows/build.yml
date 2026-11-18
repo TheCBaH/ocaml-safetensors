@@ -109,6 +109,7 @@ jobs:
         run: |
           opam update
           opam install . --deps-only --with-test --yes
+          opam upgrade --yes
           mkdir -p .cache/reports
           opam list --installed --columns=name,version > .cache/reports/latest-packages.txt
           opam pin list > .cache/reports/latest-pins.txt
