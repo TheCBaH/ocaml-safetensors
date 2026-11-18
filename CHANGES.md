@@ -16,9 +16,10 @@
   include tensor/offset context on partial read failures. Document private
   writable COW mappings, unchanged-file requirements, possible fatal faults,
   GC lifetime and partially modified read destinations.
-- Decode header prefixes explicitly on all backends, avoiding incorrect
-  little-endian 64-bit reads in the Melange runtime. Add independent byte
-  prefix checks and a 65,536-byte header regression.
+- Isolate header prefix decoding in a private module. Native and js_of_ocaml
+  use `String.get_int64_le`; Melange uses explicit byte assembly to avoid its
+  runtime's incorrect little-endian 64-bit reads. Add independent byte prefix
+  checks and a 65,536-byte header regression.
 - Guard memory tensor copies against the runtime's maximum bytes allocation.
   Expand string/bigstring/descriptor/mmap parity, boundary, sparse-file and
   replayable differential coverage. Large-file checks are explicit targets.

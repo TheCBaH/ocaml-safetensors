@@ -70,12 +70,14 @@ else
   patch --batch --fuzz=0 -p1 -d "$work/jsont-0.2.0" < javascript/melange/jsont.patch
   mkdir -p "$work/core" "$work/polyfill"
   cp src/safetensors.{ml,mli} "$work/core/"
+  cp src/header_prefix.mli javascript/melange/header_prefix.ml "$work/core/"
   cat > "$work/polyfill/dune" <<'EOF'
 (library (name bigarray_compat) (public_name safetensors-melange.bigarray)
  (modules) (modes melange) (libraries melange-bigarray.compat))
 EOF
   cat > "$work/core/dune" <<'EOF'
 (library (name safetensors) (public_name safetensors-melange.core)
+ (private_modules header_prefix)
  (modes melange) (libraries safetensors-melange.jsont safetensors-melange.codec))
 EOF
   cat > "$work/adapter/dune" <<'EOF'

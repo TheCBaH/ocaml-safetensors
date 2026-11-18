@@ -77,6 +77,12 @@ Both backends generate their typed-array validator binding from the shared
 
 ## Melange dependency port and Bigarray
 
+Header prefix decoding uses a private backend-specific module. Native and
+js_of_ocaml use `String.get_int64_le`; Melange assembles the eight bytes
+explicitly because the pinned 7.0.1 runtime decodes them incorrectly. Upstream
+[PR #2029](https://github.com/melange-re/melange/pull/2029) fixes this in
+development sources, but the fix is not yet released.
+
 The build fetches hash-locked upstream Jsont and bytesrw releases and compiles
 all their core/codec source. It never substitutes JSON.parse or an abbreviated
 JSON decoder. Upstream ISC licenses are included in the extracted releases;
