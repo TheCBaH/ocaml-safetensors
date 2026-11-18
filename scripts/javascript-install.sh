@@ -4,6 +4,9 @@ cd "$(dirname "$0")/.."
 root=$PWD
 backend=${1:?usage: javascript-install.sh jsoo|melange}
 work=$root/.cache/javascript/$backend
+mkdir -p "$root/.cache/javascript"
+exec 9>"$root/.cache/javascript/$backend.lock"
+flock 9
 prefix=$work/installed
 client=$work/client
 mkdir -p "$client"
@@ -13,10 +16,10 @@ export OCAMLPATH="$prefix/lib:$root/.cache/javascript/native/lib${OCAMLPATH:+:$O
 if [ "$backend" = melange ]; then
   export OCAMLPATH="$prefix/lib:$root/.cache/javascript/bigarray/installed/lib${OCAMLPATH:+:$OCAMLPATH}"
 fi
-cat > "$client/dune-project" <<'EOF'
-(lang dune 3.17)
-(using melange 0.1)
-EOF
+{
+  printf '(lang dune 3.17)\n'
+  if [ "$backend" = melange ]; then printf '(using melange 0.1)\n'; fi
+} > "$client/dune-project"
 if [ "$backend" = melange ]; then
   cat > "$client/dune" <<'EOF'
 (melange.emit (target output) (modules main)
@@ -24,11 +27,10 @@ if [ "$backend" = melange ]; then
   safetensors-melange.jsont safetensors-melange.codec safetensors-melange.bytesrw)
  (preprocess (pps melange.ppx)))
 EOF
-  cat > "$client/main.ml" <<'EOF'
-module Adapter = Safetensors_melange
-let bytes : Adapter.Byte_buffer.t = [%mel.raw "new Uint8Array([2,0,0,0,0,0,0,0,123,125])"]
+  printf 'module Adapter = Safetensors_melange\n' > "$client/main.ml"
+  cat "$root/javascript/shared/installed-client.ml" >> "$client/main.ml"
+  cat >> "$client/main.ml" <<'EOF'
 let () =
-  assert (Result.is_ok (Adapter.Reader.of_uint8array bytes));
   let a = Melange_bigarray.Array1.init Melange_bigarray.float64
       Melange_bigarray.c_layout 4 float_of_int in
   let compatible : (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t = a in
@@ -52,14 +54,9 @@ else
 (executable (name main) (modules main) (modes js)
  (libraries safetensors-jsoo js_of_ocaml))
 EOF
-  cat > "$client/main.ml" <<'EOF'
-open Js_of_ocaml
-module Adapter = Safetensors_jsoo
-let bytes = Js.Unsafe.js_expr "new Uint8Array([2,0,0,0,0,0,0,0,123,125])"
-let () =
-  assert (Result.is_ok (Adapter.Reader.of_uint8array bytes));
-  print_endline "external installed jsoo client passed"
-EOF
+  printf 'module Adapter = Safetensors_jsoo\n' > "$client/main.ml"
+  cat "$root/javascript/shared/installed-client.ml" >> "$client/main.ml"
+  printf 'let () = print_endline "external installed jsoo client passed"\n' >> "$client/main.ml"
   entry=$client/_build/default/main.bc.js
 fi
 opam exec -- dune build --root "$client" @all

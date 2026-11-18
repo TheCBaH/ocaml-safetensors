@@ -20,6 +20,7 @@ let () =
         Adapter.Reader.copy_tensor (Core_cases.get reader) (Js.to_string name)
         |> Core_cases.get
 
+      method wide = Core_cases.wide_run ()
       val maxStringLength = Sys.max_string_length
       val maxInt = max_int
     end

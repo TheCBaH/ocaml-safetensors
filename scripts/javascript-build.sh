@@ -5,6 +5,9 @@ backend=${1:?usage: javascript-build.sh jsoo|melange}
 case "$backend" in jsoo|melange) ;; *) exit 2;; esac
 root=$PWD
 work=$root/.cache/javascript/$backend
+mkdir -p "$root/.cache/javascript"
+exec 9>"$root/.cache/javascript/$backend.lock"
+flock 9
 python3 - "$work" <<'PY'
 import shutil
 import sys
@@ -15,7 +18,16 @@ if work.exists():
 PY
 mkdir -p "$work/adapter"
 cp javascript/shared/{reader.ml,reader.mli,byte_buffer.mli} "$work/adapter/"
-cp "javascript/$backend/byte_buffer.ml" "$work/adapter/"
+python3 - "$backend" "$work" <<'PYTHON'
+import sys
+from pathlib import Path
+backend, work = sys.argv[1], Path(sys.argv[2])
+validator = Path('javascript/shared/validate_uint8array.js').read_text().strip()
+binding = Path(f'javascript/{backend}/byte_buffer.ml').read_text()
+assert binding.count('__SAFETENSORS_UINT8ARRAY_VALIDATOR__') == 1
+(work / 'adapter/byte_buffer.ml').write_text(
+    binding.replace('__SAFETENSORS_UINT8ARRAY_VALIDATOR__', validator))
+PYTHON
 cp javascript/shared/{describe.ml,test_bigarray.ml} test/core_cases.ml "$work/"
 cp "javascript/$backend/main.ml" "$work/"
 python3 - "$work" <<'PY'
@@ -30,13 +42,7 @@ fixtures = sorted(Path('test/fixtures').glob('*.safetensors'))
 PY
 if [ "$backend" = jsoo ]; then
   sed -i 's/^type t$/type t = Js_of_ocaml.Typed_array.uint8Array Js_of_ocaml.Js.t/' "$work/adapter/byte_buffer.mli"
-  opam exec -- dune build -p safetensors @install
-  opam exec -- dune install --prefix "$root/.cache/javascript/native" safetensors
   export OCAMLPATH="$root/.cache/javascript/native/lib${OCAMLPATH:+:$OCAMLPATH}"
-  cat > "$work/dune-project" <<'EOF'
-(lang dune 3.17)
-(package (name safetensors-jsoo))
-EOF
   cat > "$work/adapter/dune" <<'EOF'
 (library (name safetensors_jsoo) (public_name safetensors-jsoo)
  (libraries safetensors js_of_ocaml))
@@ -64,11 +70,6 @@ else
   patch --batch --fuzz=0 -p1 -d "$work/jsont-0.2.0" < javascript/melange/jsont.patch
   mkdir -p "$work/core" "$work/polyfill"
   cp src/safetensors.{ml,mli} "$work/core/"
-  cat > "$work/dune-project" <<'EOF'
-(lang dune 3.17)
-(using melange 0.1)
-(package (name safetensors-melange))
-EOF
   cat > "$work/polyfill/dune" <<'EOF'
 (library (name bigarray_compat) (public_name safetensors-melange.bigarray)
  (modules) (modes melange) (libraries melange-bigarray.compat))
@@ -106,6 +107,12 @@ EOF
         (bytesrw-0.3.0/LICENSE.md as bytesrw-LICENSE.md)))
 EOF
 fi
+version=$(python3 scripts/package-version.py)
+{
+  printf '(lang dune 3.17)\n(version %s)\n' "$version"
+  if [ "$backend" = melange ]; then printf '(using melange 0.1)\n'; fi
+  printf '(package (name safetensors-%s))\n' "$backend"
+} > "$work/dune-project"
 cat >> "$work/dune" <<'EOF'
 (dirs :standard \ client installed)
 EOF

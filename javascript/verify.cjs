@@ -64,6 +64,7 @@ async function main() {
   // Run the browser bundle in Node too; the reader has no Node I/O dependency.
   const api = backend === 'jsoo' ? require(entry).safetensors :
     (vm.runInThisContext(code, {filename:bundle}), globalThis.safetensors);
+  api.wide();
   const node = verify(api, cases, assert.deepStrictEqual, assert.ok);
   const first = cases.find(c => c.expected.ok && c.expected.tensors.length);
   const buffer = Buffer.from(first.hex, 'hex');
@@ -85,7 +86,7 @@ async function main() {
       return (0,eval)('('+source+')')(globalThis.safetensors,cases,equal,ok);
     }, {cases, source:verify.toString()});
     const report = {backend, nodeVersion:process.version, browserVersion:browser.version(),
-      node, browser:result, browserBundleBytes:fs.statSync(bundle).size,
+      node, wideHeaders:true, browser:result, browserBundleBytes:fs.statSync(bundle).size,
       peakRssBytes:process.resourceUsage().maxRSS*1024,
       memoryMeasurement:'Node process peak RSS, includes corpus/hex comparison and bundling; not intrinsic reader overhead'};
     fs.mkdirSync(path.join(root,'.cache/reports'),{recursive:true});
