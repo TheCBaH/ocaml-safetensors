@@ -1,5 +1,6 @@
 (lang dune 3.17)
 (name safetensors)
+(version 0.1.0~dev)
 (generate_opam_files true)
 (source (github TheCBaH/ocaml-safetensors))
 (license MIT)
@@ -20,4 +21,5 @@
  (depends
   (ocaml (>= 4.14))
   dune
+  base-unix
   (safetensors (= :version))))
