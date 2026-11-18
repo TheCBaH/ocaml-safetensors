@@ -157,8 +157,8 @@ probe selected bytes beyond 2 GiB without copying the complete tensor, and check
 disk budget first. Unsupported environments report an explicit skip; ordinary
 `runtest` and `opam install --with-test` do not create an 8 GiB file.
 `make test.copy-limit-32` checks the copy-allocation guard only when run by a
-true 32-bit OCaml runtime; another runtime reports a skip rather than proving
-32-bit support.
+true 32-bit OCaml runtime; another runtime fails the target so it cannot
+produce a misleading portability result.
 
 External conformance uses the upstream Rust-backed `safetensors.deserialize`
 API; Torch and model inference are not involved. On Linux x86-64 or aarch64,
