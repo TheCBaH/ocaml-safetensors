@@ -1,0 +1,4 @@
+# CONFIG PROVIDER
+install safetensors
+install safetensors-unix
+install __private__/safetensors_io

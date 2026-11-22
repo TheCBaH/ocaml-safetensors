@@ -98,7 +98,11 @@ let () =
 ML
 opam exec --switch "$work/switch" -- dune build --root "$work/client" @all
 run_offline "$work/client/_build/default/reader.exe" "$work/source/test/fixtures/bf16.safetensors"
+lib=$(opam var --switch "$work/switch" lib)
 mkdir -p "$root/.cache/reports"
+opam exec --switch "$work/switch" -- sh "$root/scripts/namespace-check.sh" --fail \
+  --prefix Safetensors --expect-libs "$root/scripts/namespace.expect" \
+  "install=$lib/safetensors" "install=$lib/safetensors-unix" | tee "$root/.cache/reports/namespace.txt"
 {
   printf 'reader commit: '
   git -C "$root" rev-parse HEAD
